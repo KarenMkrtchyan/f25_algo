@@ -19,15 +19,12 @@ class PythiaModel:
 
     def generate(self, prompt:str):
         inputs = self.tokenizer(prompt, return_tensors="pt")
-        tokens = self.model.generate(**inputs)
+        tokens = self.model.generate(**inputs, max_new_tokens=64, pad_token_id=self.tokenizer.eos_token_id)
         return self.tokenizer.decode(tokens[0])
 
-if __name__ == "__main__":
-    model = PythiaModel(
-        model_name="EleutherAI/pythia-70m-deduped",
-        revision="step3000",
-        cache_dir="./pythia-70m-deduped/step3000"
-    )
-    
-    output = model.generate("Hello, I am")
-    print(output)
+
+### 70m 
+# model_naem "EleutherAI/pythia-70m-deduped",
+# revision "step3000",
+# cache_die "./pythia-70m-deduped/step3000"
+
