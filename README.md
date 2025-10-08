@@ -11,3 +11,7 @@ Julian, Karen, Arya, Syd, Akhil
    `venv\Scripts\Activate.ps1`
 2. Install dependencies
    `pip install -r requirements.txt`
+
+# TODOs
+
+fix version numbering in req.txt

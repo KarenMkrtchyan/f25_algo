@@ -1,7 +1,9 @@
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pyarrow.dataset as ds
 from math import ceil
 from pathlib import Path
+import pandas as pd
 
 def write_parquet_shards(rows: list[dict], out_dir: str, prefix: str, shard_size: int = 500_000, compression: str = "zstd"):
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -14,5 +16,14 @@ def write_parquet_shards(rows: list[dict], out_dir: str, prefix: str, shard_size
             table,
             f"{out_dir}/{prefix}-{i:05d}.parquet",
             compression=compression,
-            use_dictionary=["text", "op"],  # improves compression
+            use_dictionary=["text", "op"],  # type: ignore[arg-type] 
         )
+
+def peek_parquet(path: str | Path) -> None:
+    """Print some quick info about the parquet file"""
+    table = pq.read_table(path)
+    print("— Schema —")
+    print(table.schema)
+    print()
+    print("— Preview —")
+    print(table.to_pandas().head())

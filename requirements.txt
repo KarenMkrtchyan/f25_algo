@@ -1,1 +1,3 @@
 pyarrow
+pandas
+numpy
