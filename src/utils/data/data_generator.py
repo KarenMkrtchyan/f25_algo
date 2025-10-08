@@ -10,7 +10,7 @@ class DataGenerator:
         b = self.rng.randint(low, high)
         op = self.rng.choice(['>', '<'])
         label = (a > b) if op == '>' else (a < b)
-        return {"text": f"{a} {op} {b}", "label": int(label), "a": a, "b": b, "op": op}
+        return {"text": f"{a} {op} {b}", "label": label, "a": a, "b": b, "op": op}
 
     def synthetic_data_one(self, size: int) -> list[dict]:
         return [self._sample(0, 10_000) for _ in range(size)]

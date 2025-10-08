@@ -4,16 +4,17 @@ class PythiaModel:
     
     def __init__(self, model_name: str, revision: str, cache_dir: str):
 
-        self.model = GPTNeoXForCausalLM.from_pretrained(
-            model_name,
-            revision=revision,
-            cache_dir=cache_dir
-        )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             revision=revision,
             cache_dir=cache_dir
+        )
+        self.model = GPTNeoXForCausalLM.from_pretrained(
+            model_name,
+            revision=revision,
+            cache_dir=cache_dir,
+            pad_token_id=self.tokenizer.eos_token_id
         )
 
     def generate(self, prompt:str):

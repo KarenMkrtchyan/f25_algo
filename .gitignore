@@ -1,4 +1,5 @@
 venv/
+pythia-70m-deduped/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
