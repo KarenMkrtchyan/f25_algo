@@ -14,8 +14,8 @@ torch.cuda.empty_cache()
 
 model = PythiaModel(
     model_name="eleutherai/pythia-70m-deduped",
-    revision="step143000",
-    cache_dir="./pythia-70m-deduped/step3000"
+    revision="step143000",  # finished training 
+    cache_dir="./pythia-70m-deduped/step143000"
 )
 
 gen = DataGenerator(seed=42)
