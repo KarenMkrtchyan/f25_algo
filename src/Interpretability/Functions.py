@@ -1,6 +1,10 @@
-#This file contains functions related to hooks
-import utils.Setup
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from utils import Setup
 from utils.model_config import load_model
+from utils.Setup import Float, Int, Tensor, HookPoint, t, einops, cv, display, HookedTransformer, Callable, functools, tqdm
 
 def hook_function (
         self, 
@@ -10,17 +14,6 @@ def hook_function (
         return attn_pattern
 
 def get_induction_score_store(n_layers: int, n_heads: int, device: str = "cpu") -> t.Tensor:
-    """
-    Create a tensor to store induction scores.
-    
-    Args:
-        n_layers: Number of layers in the model
-        n_heads: Number of attention heads per layer
-        device: Device to create the tensor on
-        
-    Returns:
-        Zero-initialized tensor for storing induction scores
-    """
     return t.zeros((n_layers, n_heads), device=device)
 
 def induction_score_hook(pattern: Float[Tensor, "batch head_index dest_pos source_pos"], hook: HookPoint):
@@ -132,10 +125,6 @@ def get_ablation_scores(
     tokens: Int[Tensor, "batch seq"],
     ablation_function: Callable = head_zero_ablation_hook,
 ) -> Float[Tensor, "n_layers n_heads"]:
-    """
-    Returns a tensor of shape (n_layers, n_heads) containing the increase in cross entropy loss
-    from ablating the output of each head.
-    """
     # Initialize an object to store the ablation scores
     ablation_scores = t.zeros((model.cfg.n_layers, model.cfg.n_heads), device=model.cfg.device)
 

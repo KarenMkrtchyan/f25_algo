@@ -1,4 +1,4 @@
-import circuitsvis as cv # type: ignore
+import circuitsvis as cv
 
 def attention_head_display(model, text, cache, layer=0, position=0):
     """
