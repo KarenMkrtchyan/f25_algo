@@ -1,4 +1,8 @@
-import utils.Setup
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from utils import Setup
 
 def visualizing_neuron_activation(gpt2_cache, gpt2_small, gpt2_str_tokens, max_k=7):
     """
