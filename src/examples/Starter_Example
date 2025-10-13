@@ -1,0 +1,24 @@
+'''
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from utils import Setup
+
+from utils.model_config import load_model
+from Interpretability import function_name
+
+model = load_model('pythia-410m')
+text_input = "The quick brown fox jumps over the lazy dog."
+cache = model.run_with_cache(text_input)
+str_tokens = model.to_str_tokens(text_input)
+
+result = function(
+    cache=cache,
+    model=model,
+    str_tokens=str_tokens,
+    other_arguments
+)
+
+This is a general outline to using the Interpretability functions,
+but you should look at the specific arguments of the functions to be sure
+'''

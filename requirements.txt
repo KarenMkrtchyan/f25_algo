@@ -1,6 +1,6 @@
 certifi==2025.10.5
 charset-normalizer==3.4.3
-filelock==3.20.0
+filelock==3.19.1
 fsspec==2025.9.0
 hf-xet==1.1.10
 huggingface-hub==0.35.3
@@ -31,3 +31,10 @@ transformers==4.57.0
 typing_extensions==4.15.0
 tzdata==2025.2
 urllib3==2.5.0
+circuitsvis
+einops
+eindex
+IPython
+transformer_lens==2.11.0
+tqdm
+jaxtyping
