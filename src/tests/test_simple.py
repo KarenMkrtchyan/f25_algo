@@ -18,7 +18,10 @@ from Interpretability.Functions import (
     get_induction_score_store,
     head_zero_ablation_hook,
     head_mean_ablation_hook,
-    logit_attribution
+    logit_attribution,
+    visualize_neuron_activation,
+    display_attention_heads,
+    display_attention_patterns
 )
 
 from Interpretability.Attention_display import attention_head_display, attention_pattern_display
@@ -50,10 +53,17 @@ class TestBasicFunctions(unittest.TestCase):
         # Create mock hook
         self.mock_hook = Mock()
         self.mock_hook.layer.return_value = 2
+        
+        # Create mock model
+        self.mock_model = Mock()
+        self.mock_model.cfg.n_layers = self.n_layers
+        self.mock_model.cfg.n_heads = self.n_heads
+        self.mock_model.cfg.device = self.device
+        self.mock_model.W_U = t.randn(self.d_model, self.d_vocab)
 
     def test_hook_function(self):
         """Test hook_function returns input unchanged."""
-        result = hook_function(self, self.attn_pattern, self.mock_hook)
+        result = hook_function(self.mock_model, self.attn_pattern, self.mock_hook)
         
         # Should return the input pattern unchanged
         t.testing.assert_close(result, self.attn_pattern)
@@ -63,17 +73,12 @@ class TestBasicFunctions(unittest.TestCase):
     def test_get_induction_score_store(self):
         """Test get_induction_score_store creates correct tensor."""
         # Test basic functionality
-        result = get_induction_score_store(self.n_layers, self.n_heads, self.device)
+        result = get_induction_score_store(self.mock_model)
         
-        self.assertEqual(result.shape, (self.n_layers, self.n_heads))
+        self.assertEqual(result.shape, (self.mock_model.cfg.n_layers, self.mock_model.cfg.n_heads))
         self.assertEqual(result.device.type, self.device)
         self.assertTrue(t.all(result == 0))
         self.assertIsInstance(result, t.Tensor)
-        
-        # Test with different parameters
-        result_2 = get_induction_score_store(4, 12, self.device)
-        self.assertEqual(result_2.shape, (4, 12))
-        self.assertTrue(t.all(result_2 == 0))
 
     def test_head_zero_ablation_hook(self):
         """Test head_zero_ablation_hook zeros out specified head."""
@@ -82,7 +87,7 @@ class TestBasicFunctions(unittest.TestCase):
         head_to_ablate = 3
         
         # Apply the hook
-        head_zero_ablation_hook(z_copy, self.mock_hook, head_to_ablate)
+        head_zero_ablation_hook(self.mock_model, z_copy, self.mock_hook, head_to_ablate)
         
         # Check that the specified head is zeroed
         self.assertTrue(t.all(z_copy[:, :, head_to_ablate, :] == 0))
@@ -102,7 +107,7 @@ class TestBasicFunctions(unittest.TestCase):
         expected_mean = self.z_tensor[:, :, head_to_ablate, :].mean(0)
         
         # Apply the hook
-        head_mean_ablation_hook(z_copy, self.mock_hook, head_to_ablate)
+        head_mean_ablation_hook(self.mock_model, z_copy, self.mock_hook, head_to_ablate)
         
         # Check that the specified head is replaced with mean
         self.assertTrue(t.allclose(z_copy[:, :, head_to_ablate, :], expected_mean))
@@ -110,10 +115,10 @@ class TestBasicFunctions(unittest.TestCase):
     def test_logit_attribution(self):
         """Test logit_attribution function."""
         result = logit_attribution(
+            self.mock_model,
             self.embed,
             self.l1_results,
             self.l2_results,
-            self.W_U,
             self.tokens
         )
         
@@ -132,10 +137,13 @@ class TestBasicFunctions(unittest.TestCase):
         embed = t.randn(2, 10)
         l1_results = t.randn(2, 1, 10)
         l2_results = t.randn(2, 1, 10)
-        W_U = t.randn(10, 5)
         tokens = t.tensor([0, 1])
         
-        result = logit_attribution(embed, l1_results, l2_results, W_U, tokens)
+        # Create a mock model with the right W_U shape
+        mock_model = Mock()
+        mock_model.W_U = t.randn(10, 5)
+        
+        result = logit_attribution(mock_model, embed, l1_results, l2_results, tokens)
         self.assertEqual(result.shape, (1, 3))  # seq-1, 1+2*1
         self.assertTrue(t.all(t.isfinite(result)))
 
@@ -144,26 +152,37 @@ class TestBasicFunctions(unittest.TestCase):
         # Test with single head
         z_single_head = t.randn(1, 5, 1, 10)
         mock_hook = Mock()
+        mock_model = Mock()
         
         # Zero ablation
         z_copy = z_single_head.clone()
-        head_zero_ablation_hook(z_copy, mock_hook, 0)
+        head_zero_ablation_hook(mock_model, z_copy, mock_hook, 0)
         self.assertTrue(t.all(z_copy[:, :, 0, :] == 0))
         
         # Mean ablation
         z_copy = z_single_head.clone()
         expected_mean = z_single_head[:, :, 0, :].mean(0)
-        head_mean_ablation_hook(z_copy, mock_hook, 0)
+        head_mean_ablation_hook(mock_model, z_copy, mock_hook, 0)
         self.assertTrue(t.allclose(z_copy[:, :, 0, :], expected_mean))
 
     def test_get_induction_score_store_edge_cases(self):
         """Test get_induction_score_store with edge cases."""
-        # Test with zero dimensions
-        result = get_induction_score_store(0, 0, self.device)
+        # Test with different model configurations
+        mock_model_small = Mock()
+        mock_model_small.cfg.n_layers = 0
+        mock_model_small.cfg.n_heads = 0
+        mock_model_small.cfg.device = self.device
+        
+        result = get_induction_score_store(mock_model_small)
         self.assertEqual(result.shape, (0, 0))
         
         # Test with large dimensions
-        result = get_induction_score_store(100, 100, self.device)
+        mock_model_large = Mock()
+        mock_model_large.cfg.n_layers = 100
+        mock_model_large.cfg.n_heads = 100
+        mock_model_large.cfg.device = self.device
+        
+        result = get_induction_score_store(mock_model_large)
         self.assertEqual(result.shape, (100, 100))
         self.assertTrue(t.all(result == 0))
 
@@ -245,21 +264,109 @@ class TestTensorOperations(unittest.TestCase):
         mock_hook = Mock()
         
         # Test hook function
-        result_hook = hook_function(self, attn_pattern, mock_hook)
+        mock_model = Mock()
+        result_hook = hook_function(mock_model, attn_pattern, mock_hook)
         self.assertEqual(result_hook.shape, attn_pattern.shape)
         
         # Test ablation hooks
         z_copy = z_tensor.clone()
-        head_zero_ablation_hook(z_copy, mock_hook, 0)
+        head_zero_ablation_hook(mock_model, z_copy, mock_hook, 0)
         self.assertTrue(t.all(z_copy[:, :, 0, :] == 0))
         
         # Test mean ablation
         z_copy = z_tensor.clone()
         original_head = z_tensor[:, :, 0, :].clone()
-        head_mean_ablation_hook(z_copy, mock_hook, 0)
+        head_mean_ablation_hook(mock_model, z_copy, mock_hook, 0)
         expected_mean = original_head.mean(0)
         self.assertTrue(t.allclose(z_copy[:, :, 0, :], expected_mean))
 
+class TestNeuronAndAttentionVisualization(unittest.TestCase):
+    """Tests for new neuron and attention visualization functions."""
+
+    def setUp(self):
+        """Set up a mock model, cache, and tokens."""
+        self.n_layers = 4
+        self.n_heads = 8
+        self.seq_len = 10
+        self.n_neurons = 16
+
+        # Mock HookedTransformer model
+        self.mock_model = Mock()
+        self.mock_model.cfg.n_layers = self.n_layers
+        self.mock_model.cfg.n_heads = self.n_heads
+
+        # Mock to_str_tokens
+        self.mock_model.to_str_tokens.side_effect = lambda x: ["token" + str(i) for i in range(self.seq_len)]
+
+        # Mock cache with "post" activations and "pattern" for attention
+        class MockCache:
+            def __getitem__(self_inner, key):
+                if key[0] == "post":
+                    return t.randn(self.seq_len, self.n_neurons)
+                elif key[0] == "pattern":
+                    return t.randn(1, self.n_heads, self.seq_len, self.seq_len)
+                raise KeyError(key)
+
+        self.mock_cache = MockCache()
+        self.str_tokens = ["token" + str(i) for i in range(self.seq_len)]
+
+    @unittest.mock.patch('Interpretability.Functions.cv')
+    def test_visualize_neuron_activation(self, mock_cv):
+        """Test neuron activation visualization."""
+        mock_cv.activations.text_neuron_activations.return_value = "text_vis"
+        mock_cv.topk_tokens.topk_tokens.return_value = "topk_vis"
+
+        text_vis, topk_vis, activations, activations_rearranged = visualize_neuron_activation(
+            self.mock_cache, self.mock_model, self.str_tokens, max_k=5
+        )
+
+        mock_cv.activations.text_neuron_activations.assert_called_once()
+        mock_cv.topk_tokens.topk_tokens.assert_called_once()
+
+        self.assertEqual(text_vis, "text_vis")
+        self.assertEqual(topk_vis, "topk_vis")
+        self.assertEqual(activations.shape, (self.seq_len, self.n_layers, self.n_neurons))
+        self.assertEqual(activations_rearranged.shape, (1, self.n_layers, self.seq_len, self.n_neurons))
+
+    @unittest.mock.patch('Interpretability.Functions.cv')
+    def test_display_attention_heads(self, mock_cv):
+        """Test attention heads visualization."""
+        mock_cv.attention.attention_heads.return_value = "attention_heads_vis"
+
+        vis = display_attention_heads(self.mock_model, "dummy text", self.mock_cache, layer=0, position=2)
+
+        self.mock_model.to_str_tokens.assert_called_with("dummy text")
+        mock_cv.attention.attention_heads.assert_called_once()
+        self.assertEqual(vis, "attention_heads_vis")
+
+    @unittest.mock.patch('Interpretability.Functions.cv')
+    def test_display_attention_patterns(self, mock_cv):
+        """Test attention patterns visualization."""
+        mock_cv.attention.attention_patterns.return_value = "attention_patterns_vis"
+
+        vis = display_attention_patterns(self.mock_model, "dummy text", self.mock_cache, layer=1, position=0)
+
+        self.mock_model.to_str_tokens.assert_called_with("dummy text")
+        mock_cv.attention.attention_patterns.assert_called_once()
+        self.assertEqual(vis, "attention_patterns_vis")
+
+    @unittest.mock.patch('Interpretability.Functions.cv')
+    def test_attention_heads_with_tokens_list(self, mock_cv):
+        """Test attention heads with pre-tokenized input list."""
+        mock_cv.attention.attention_heads.return_value = "attention_heads_vis"
+
+        tokens_list = ["token" + str(i) for i in range(self.seq_len)]
+        vis = display_attention_heads(self.mock_model, tokens_list, self.mock_cache, layer=0, position=1)
+
+        self.mock_model.to_str_tokens.assert_called_with(tokens_list)
+        self.assertEqual(vis, "attention_heads_vis")
+
+    @unittest.mock.patch('Interpretability.Functions.cv')
+    def test_attention_patterns_with_tokens_list(self, mock_cv):
+        """Test attention patterns with pre-tokenized input list."""
+        mock_cv.attention.attention_patterns.return_value = "attention_patterns_vis"
+
+        tokens_list = ["token" + str(i) for i in range(self.seq_len)]
 
 def run_simple_tests():
     """Run simple test cases."""
@@ -273,6 +380,7 @@ def run_simple_tests():
     test_suite.addTest(unittest.makeSuite(TestBasicFunctions))
     test_suite.addTest(unittest.makeSuite(TestAttentionDisplay))
     test_suite.addTest(unittest.makeSuite(TestTensorOperations))
+    test_suite.addTest(unittest.makeSuite(TestNeuronAndAttentionVisualization))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
@@ -299,7 +407,6 @@ def run_simple_tests():
     else:
         print(f"\n❌ {len(result.failures + result.errors)} test(s) failed.")
         return False
-
 
 if __name__ == "__main__":
     success = run_simple_tests()
