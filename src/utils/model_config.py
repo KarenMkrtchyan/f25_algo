@@ -1,18 +1,20 @@
 from .Setup import Dict, Any, Optional, HookedTransformer, HookedTransformerConfig, t, device
 
 COMMON_MODELS = {
+    # GPT-2 Family
     "gpt2": "gpt2",
-    "gpt2-small": "gpt2-small", 
+    "gpt2-small": "gpt2-small",
     "gpt2-medium": "gpt2-medium",
     "gpt2-large": "gpt2-large",
     "gpt2-xl": "gpt2-xl",
     
+    # GPT-Neo and GPT-J
     "gpt-neo-125M": "EleutherAI/gpt-neo-125M",
     "gpt-neo-1.3B": "EleutherAI/gpt-neo-1.3B",
     "gpt-neo-2.7B": "EleutherAI/gpt-neo-2.7B",
-
     "gpt-j-6B": "EleutherAI/gpt-j-6b",
-    
+
+    # OPT Family
     "opt-125m": "facebook/opt-125m",
     "opt-350m": "facebook/opt-350m",
     "opt-1.3b": "facebook/opt-1.3b",
@@ -20,6 +22,7 @@ COMMON_MODELS = {
     "opt-6.7b": "facebook/opt-6.7b",
     "opt-13b": "facebook/opt-13b",
 
+    # Pythia Family
     "pythia-70m": "EleutherAI/pythia-70m-deduped",
     "pythia-160m": "EleutherAI/pythia-160m-deduped",
     "pythia-410m": "EleutherAI/pythia-410m-deduped",
@@ -28,6 +31,30 @@ COMMON_MODELS = {
     "pythia-2.8b": "EleutherAI/pythia-2.8b-deduped",
     "pythia-6.9b": "EleutherAI/pythia-6.9b-deduped",
     "pythia-12b": "EleutherAI/pythia-12b-deduped",
+
+    # LLaMA Family (Meta)
+    "llama-7b": "meta-llama/Llama-2-7b-hf",
+    "llama-13b": "meta-llama/Llama-2-13b-hf",
+    "llama-70b": "meta-llama/Llama-2-70b-hf",
+    "llama-3-8b": "meta-llama/Meta-Llama-3-8B",
+    "llama-3-70b": "meta-llama/Meta-Llama-3-70B",
+
+    # Gemma Family (Google)
+    "gemma-2b": "google/gemma-2b",
+    "gemma-7b": "google/gemma-7b",
+    "gemma-2-2b": "google/gemma-2-2b",
+    "gemma-2-9b": "google/gemma-2-9b",
+
+    # Qwen Family (Alibaba)
+    "qwen-1.5b": "Qwen/Qwen-1.5B",
+    "qwen-7b": "Qwen/Qwen-7B",
+    "qwen-14b": "Qwen/Qwen-14B",
+    "qwen-72b": "Qwen/Qwen-72B",
+    "qwen2-7b": "Qwen/Qwen2-7B",
+    "qwen2-72b": "Qwen/Qwen2-72B",
+    "qwen2.5-7b": "Qwen/Qwen2.5-7B",
+    "qwen2.5-32b": "Qwen/Qwen2.5-32B",
+    "qwen2.5-72b": "Qwen/Qwen2.5-72B",
 }
 
 def get_model_config(model_name: str) -> Dict[str, Any]:
