@@ -7,8 +7,8 @@ from utils import Setup
 from utils.model_config import load_model
 from Interpretability import function_name
 
-model = load_model('pythia-410m')
-text_input = "The quick brown fox jumps over the lazy dog."
+model = load_model("model name")
+text_input = "Sample text"
 cache = model.run_with_cache(text_input)
 str_tokens = model.to_str_tokens(text_input)
 
