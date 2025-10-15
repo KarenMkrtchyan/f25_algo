@@ -452,3 +452,41 @@ def display_attention_patterns(model, text_or_tokens, cache, layer=0, position=0
     )
 
     return vis
+
+def activation_patch(
+    model: HookedTransformer,
+    clean_prompt: str,
+    corrupted_prompt: str,
+    hook_point: str = "blocks.{layer}.hook_resid_pre",
+    layer: int | list[int] = 0,
+    token_pos: int | None = None,
+    return_logits: bool = True,
+):
+    """
+    Perform activation patching on a HookedTransformer model.
+    """
+    clean_tokens = model.to_tokens(clean_prompt).to(model.cfg.device)
+    corrupted_tokens = model.to_tokens(corrupted_prompt).to(model.cfg.device)
+
+    _, clean_cache = model.run_with_cache(clean_tokens)
+    _, corrupted_cache = model.run_with_cache(corrupted_tokens)
+
+    def patch_hook(value, hook):
+        clean_value = clean_cache[hook.name]
+        if clean_value.shape != value.shape:
+            raise ValueError(f"Activation shapes differ at {hook.name}: {clean_value.shape} vs {value.shape}")
+        if token_pos is not None:
+            value[:, token_pos] = clean_value[:, token_pos]
+            return value
+        return clean_value
+
+    if isinstance(layer, int):
+        layers = [layer]
+    else:
+        layers = layer
+
+    hooks = [(hook_point.format(layer=l), patch_hook) for l in layers]
+    result = model.run_with_hooks(corrupted_tokens, fwd_hooks=hooks)
+
+    return result if return_logits else (result, clean_cache, corrupted_cache)
+
