@@ -36,7 +36,7 @@ df = pd.DataFrame(results)
 model_count=len(MODELS)
 ex=10
 run=1
-file_name=f"dataruns/accuracy_eval_{3}models_{ex}examples_RUN{run}.csv"
+file_name=f"dataruns/accuracy_eval_{model_count}models_{ex}examples_RUN{run}.csv"
 df.to_csv(file_name, index=False)
 
 print(f"Results saved in {file_name}")
