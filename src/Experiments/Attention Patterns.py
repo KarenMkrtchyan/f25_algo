@@ -8,7 +8,7 @@ from utils import Setup
 from utils.model_config import load_model
 
 
-model_name = "pythia-2.8b"
+model_name = "qwen2-7b"
 model = load_model(model_name)
 
 text = "Which number is greater: 3 or 5?"
@@ -33,7 +33,7 @@ all_stats = []
 for layer in range(model.cfg.n_layers):
     key_name = f"blocks.{layer}.attn.hook_pattern"
     attn = cache[key_name][0]
-    attn = t.softmax(attn, dim=-1)
+    #attn = t.softmax(attn, dim=-1)
 
     for head in range(model.cfg.n_heads):
         attn_head = attn[head]
@@ -53,6 +53,12 @@ for layer in range(model.cfg.n_layers):
             "max": max_val
         })
 
+results_folder = "Results"
+output_folder = os.path.join(results_folder, "Attention Patterns")
+os.makedirs(output_folder, exist_ok=True)
+
 df_stats = pd.DataFrame(all_stats)
 print(df_stats)
-df_stats.to_csv(f"{model_name}_attention_int_comparisons.csv", index=False)
+
+csv_path = os.path.join(output_folder, f"{model_name}_attention_pattern.csv")
+df_stats.to_csv(csv_path, index=False)

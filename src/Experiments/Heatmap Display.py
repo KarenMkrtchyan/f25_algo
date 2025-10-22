@@ -9,13 +9,18 @@ import matplotlib.pyplot as plt
 from utils import Setup
 from utils.model_config import load_model
 
-model_name = "pythia-2.8b"
+model_name = "qwen2-7b"
 model = load_model(model_name)
 
 text = "Which number is greater: 3 or 5?"
 tokens = model.to_tokens(text)
 tokens_str = model.to_str_tokens(tokens)
 logits, cache = model.run_with_cache(tokens)
+
+results_folder = "Results"
+display_folder = os.path.join(results_folder, "Attention_Heatmaps")
+output_folder = os.path.join(display_folder, model_name)
+os.makedirs(output_folder, exist_ok=True)
 
 for i, tok in enumerate(tokens_str):
     print(i, repr(tok))
@@ -27,17 +32,11 @@ def is_relevant(tok: str) -> bool:
 relevant_tokens = [i for i, tok in enumerate(tokens_str) if is_relevant(tok)]
 print("Relevant token indices:", relevant_tokens)
 
-base_dir = "Attention_Heatmaps"
-model_subfolder = os.path.join(base_dir, model_name)
-os.makedirs(model_subfolder, exist_ok=True)
-
 attn_sum = None
-
 num_layers = model.cfg.n_layers
 for layer in range(num_layers):
     key_name = f"blocks.{layer}.attn.hook_pattern"
     attn_layer = cache[key_name][0]
-    attn_layer = t.softmax(attn_layer, dim=-1)
 
     attn_avg = t.mean(attn_layer, dim=0)
     attn_relevant_avg = attn_avg[relevant_tokens, :][:, relevant_tokens]
@@ -62,7 +61,7 @@ for layer in range(num_layers):
     plt.xlabel("Key tokens")
     plt.ylabel("Query tokens")
 
-    filename = os.path.join(model_subfolder, f"layer{layer}_aggregated.png")
+    filename = os.path.join(output_folder, f"layer{layer}_aggregated.png")
     plt.savefig(filename)
     plt.close()
 
@@ -84,6 +83,6 @@ plt.title(f"{model_name} - Aggregated Attention Across All Layers and Heads")
 plt.xlabel("Key tokens")
 plt.ylabel("Query tokens")
 
-filename = os.path.join(model_subfolder, f"Aggregated_all_layers.png")
+filename = os.path.join(output_folder, f"Aggregated_all_layers.png")
 plt.savefig(filename)
 plt.close()
