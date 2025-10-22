@@ -30,7 +30,8 @@ from transformer_lens import (
 from transformer_lens.hook_points import HookPoint
 
 device = t.device(
-    "mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu"
+    #"mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else '''
+    "cpu"
 )
 
 print(f"\nUsing device: {device}")
