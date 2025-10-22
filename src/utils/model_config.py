@@ -46,10 +46,10 @@ COMMON_MODELS = {
     "gemma-2-9b": "google/gemma-2-9b",
 
     # Qwen Family (Alibaba)
-    "qwen-1.5b": "Qwen/Qwen-1.5B",
     "qwen-7b": "Qwen/Qwen-7B",
     "qwen-14b": "Qwen/Qwen-14B",
     "qwen-72b": "Qwen/Qwen-72B",
+    "qwen2-1.5b": "Qwen/Qwen2-1.5B",
     "qwen2-7b": "Qwen/Qwen2-7B",
     "qwen2-72b": "Qwen/Qwen2-72B",
     "qwen2.5-7b": "Qwen/Qwen2.5-7B",
