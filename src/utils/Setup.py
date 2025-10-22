@@ -15,7 +15,7 @@ import numpy as np
 import torch as t
 import torch.nn as nn
 import torch.nn.functional as F
-#from eindex import eindex
+from eindex import eindex
 from IPython.display import display
 from jaxtyping import Float, Int
 from torch import Tensor

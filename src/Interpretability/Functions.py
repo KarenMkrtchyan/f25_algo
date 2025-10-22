@@ -216,27 +216,29 @@ def get_ablation_scores(
     Returns:
         Tensor of ablation scores for each head
     """
-    # Initialize ablation scores
-    ablation_scores = t.zeros((model.cfg.n_layers, model.cfg.n_heads), device=model.cfg.device)
+    device = model.cfg.device
+    tokens = tokens.to(device)
+    
+    n_layers, n_heads = model.cfg.n_layers, model.cfg.n_heads
+    ablation_scores = t.zeros((n_layers, n_heads), device=device)
 
-    # Calculate baseline loss
     model.reset_hooks()
-    logits = model(tokens, return_type="logits")
-    loss_no_ablation = -t.log_softmax(logits, dim=-1).gather(-1, tokens.unsqueeze(-1)).squeeze(-1).mean()
+    with t.no_grad():
+        logits = model(tokens, return_type="logits")
+        loss_fn = t.nn.CrossEntropyLoss()
+        loss_no_ablation = loss_fn(logits.view(-1, logits.shape[-1]), tokens.view(-1))
 
-    for layer in tqdm(range(model.cfg.n_layers)):
-        for head in range(model.cfg.n_heads):
-            # Create hook function
+    hook_names = [utils.get_act_name("z", layer) for layer in range(n_layers)]
+
+    for layer in tqdm(range(n_layers), desc="Layers"):
+        for head in range(n_heads):
             temp_hook_fn = functools.partial(ablation_function, model, head_index_to_ablate=head)
-            
-            # Run model with ablation hook
-            ablated_logits = model.run_with_hooks(
-                tokens, fwd_hooks=[(utils.get_act_name("z", layer), temp_hook_fn)]
-            )
-            
-            # Calculate loss difference
-            loss = -t.log_softmax(ablated_logits, dim=-1).gather(-1, tokens.unsqueeze(-1)).squeeze(-1).mean()
-            ablation_scores[layer, head] = loss - loss_no_ablation
+
+            with t.no_grad():
+                ablated_logits = model.run_with_hooks(tokens, fwd_hooks=[(hook_names[layer], temp_hook_fn)])
+                loss_ablated = loss_fn(ablated_logits.view(-1, logits.shape[-1]), tokens.view(-1))
+
+            ablation_scores[layer, head] = (loss_ablated - loss_no_ablation).item()
 
     return ablation_scores
 
@@ -318,7 +320,8 @@ def run_model_with_induction_analysis(
 def run_model_with_ablation_analysis(
     model: HookedTransformer,
     text: str,
-    ablation_function: Callable = head_zero_ablation_hook
+    ablation_function: Callable = head_zero_ablation_hook,
+    threshold: float = 0.01,
 ) -> dict:
     """
     Run a complete ablation analysis on the model.
@@ -338,12 +341,13 @@ def run_model_with_ablation_analysis(
     ablation_scores = get_ablation_scores(model, tokens, ablation_function)
     
     # Find most important heads
-    important_heads = []
-    for layer in range(model.cfg.n_layers):
-        for head in range(model.cfg.n_heads):
-            score = ablation_scores[layer, head].item()
-            if score > 0.01:  # Threshold for "important" heads
-                important_heads.append((layer, head, score))
+    
+    important_heads = [
+    (layer, head, ablation_scores[layer, head].item())
+    for layer in range(model.cfg.n_layers)
+    for head in range(model.cfg.n_heads)
+    if ablation_scores[layer, head].item() > threshold
+    ]
     
     important_heads.sort(key=lambda x: x[2], reverse=True)
     
