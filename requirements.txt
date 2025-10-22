@@ -118,7 +118,7 @@ tornado==6.5.2
 tqdm==4.67.1
 tqdm-multiprocess==0.0.11
 traitlets==5.14.3
-transformer-lens==2.11.0
+transformer_lens==2.16.1
 transformers==4.57.0
 typeguard==4.4.4
 typepy==1.3.4
