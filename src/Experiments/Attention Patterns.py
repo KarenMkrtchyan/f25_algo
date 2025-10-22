@@ -33,7 +33,6 @@ all_stats = []
 for layer in range(model.cfg.n_layers):
     key_name = f"blocks.{layer}.attn.hook_pattern"
     attn = cache[key_name][0]
-    #attn = t.softmax(attn, dim=-1)
 
     for head in range(model.cfg.n_heads):
         attn_head = attn[head]
