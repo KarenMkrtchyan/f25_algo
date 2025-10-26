@@ -1,0 +1,5 @@
+model_name,accuracy
+Qwen/Qwen2.5-0.5B,55.900000000000006
+Qwen/Qwen2.5-1.5B,85.6
+Qwen/Qwen2.5-3B,99.2
+Qwen/Qwen2.5-7B,99.3
