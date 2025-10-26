@@ -1,0 +1,3 @@
+model_name,accuracy
+meta-llama/Llama-3.2-1B,53.0
+meta-llama/Llama-3.2-3B,65.2
