@@ -9,17 +9,17 @@ import matplotlib.pyplot as plt
 from utils import Setup
 from utils.model_config import load_model
 
-model_name = "qwen2-7b"
+model_name = "pythia-160m"
 model = load_model(model_name)
 
-text = "Which number is greater: 3 or 5?"
+text = "Which number is greater: 5 or 3?"
 tokens = model.to_tokens(text)
 tokens_str = model.to_str_tokens(tokens)
 logits, cache = model.run_with_cache(tokens)
 
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Attention_Heatmaps")
-output_folder = os.path.join(display_folder, model_name)
+output_folder = os.path.join(display_folder, f"{model_name} - {text}")
 os.makedirs(output_folder, exist_ok=True)
 
 for i, tok in enumerate(tokens_str):

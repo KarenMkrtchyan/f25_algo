@@ -494,3 +494,24 @@ def activation_patch(
 
     return result if return_logits else (result, clean_cache, corrupted_cache)
 
+def attach_head_ablation_hooks(model: HookedTransformer, layers: list[int], heads: list[int]):
+    """
+    Attach hooks to zero out specific heads in specific layers.
+
+    Args:
+        model (HookedTransformer): Pretrained model
+        layers (list[int]): List of layer indices to ablate
+        heads (list[int]): List of head indices to ablate in each layer
+    """
+
+    for layer in layers:
+        hook_name = f"blocks.{layer}.attn.hook_z" 
+        for head in heads:
+            model.add_hook(
+                hook_name,
+                lambda z, hook, head_index=head: head_zero_ablation_hook(model, z, hook, head_index)
+            )
+
+    return model
+
+
