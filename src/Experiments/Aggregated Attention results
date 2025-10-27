@@ -1,0 +1,104 @@
+import sys
+import os
+import re
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import torch as t
+import pandas as pd
+from lm_eval import tasks
+from utils import Setup
+from utils.model_config import load_model
+
+def get_attention_head_stats_df(
+    model_name: str,
+    task_name: str,
+    task_manager: tasks.TaskManager,
+    num_fewshot: int = 0,
+    limit: int = 10,
+) -> pd.DataFrame:
+
+    model = load_model(model_name)
+    per_example_dfs = []
+    task = next(tk for tk in task_manager.all_tasks if tk.task == task_name)
+
+    def is_relevant(tok: str) -> bool:
+            t_clean = tok.lstrip('▁')  # remove leading space
+            return bool(re.search(r'\d', t_clean)) or t_clean in ["greater","less", ">", "<", "=", " greater", " less", "greater ", "less "]
+
+    examples = list(task.get_test_examples())[:limit]
+    print(f'Evaluating task {task_name}, {len(examples)} examples')
+    for ex_id in range(num_fewshot, len(examples)):
+        fewshot_examples = examples[ex_id - num_fewshot : ex_id]
+        prompt_strings = []
+        for ex in fewshot_examples:
+            if 'choices' in ex:
+                prompt_strings.append(f"{ex['query']}\nChoices: {ex['choices']}")
+            else:
+                prompt_strings.append(ex['query'])
+        prompt_strings.append(examples[ex_id]['query'])
+        prompt = "\n\n".join(prompt_strings)
+
+        print(f"\nPrompt for example {ex_id}:\n{prompt}\n")
+
+    tokens = model.to_tokens(prompt)
+    tokens_str = model.to_str_tokens(tokens)
+    logits, cache = model.run_with_cache(tokens)
+
+    for i, tok in enumerate(tokens_str):
+        print(i, repr(tok))
+
+    relevant_tokens = [i for i, tok in enumerate(tokens_str) if is_relevant(tok)]
+    print("Relevant token indices:", relevant_tokens)
+
+    all_stats = []
+    for layer in range(model.cfg.n_layers):
+        key_name = f"blocks.{layer}.attn.hook_pattern"
+        attn = cache[key_name][0]
+        #attn = t.softmax(attn, dim=-1)
+
+        for head in range(model.cfg.n_heads):
+            attn_head = attn[head]
+            if len(relevant_tokens) > 0:
+                attn_relevant = attn_head[relevant_tokens, :][:, relevant_tokens]
+                mean_val = t.mean(attn_relevant).item()
+                min_val = t.min(attn_relevant).item()
+                max_val = t.max(attn_relevant).item()
+            else:
+                mean_val = min_val = max_val = None
+
+            all_stats.append({
+                "task": task_name,
+                "example_id": ex_id,
+                "layer": layer,
+                "head": head,
+                "mean": mean_val,
+                "min": min_val,
+                "max": max_val
+            })
+        example_df = pd.DataFrame(all_stats)
+        per_example_dfs.append(example_df)
+
+    all_examples_df = pd.concat(per_example_dfs, ignore_index=True)
+    return per_example_dfs, all_examples_df
+
+task_path = "f25_algo/test_suite/tasks"
+tm = tasks.TaskManager(include_path=task_path) 
+per_example_dfs, all_examples_df = get_attention_head_stats_df(
+    model_name='pythia-70m',
+    task_name="greater_than",
+    task_manager=tm,
+    num_fewshot=2,
+    limit=10
+)
+
+print(all_examples_df.head())
+
+'''
+results_folder = "Results"
+output_folder = os.path.join(results_folder, "Aggregated Attention Results")
+os.makedirs(output_folder, exist_ok=True)
+
+results_df = get_attention_head_stats_df()
+
+csv_path = os.path.join(output_folder, f"{model_name} - {prompt}.csv")
+results_df.to_csv(csv_path, index=False)
+'''
