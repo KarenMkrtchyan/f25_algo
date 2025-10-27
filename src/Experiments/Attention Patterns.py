@@ -8,10 +8,11 @@ from utils import Setup
 from utils.model_config import load_model
 
 
-model_name = "qwen2-7b"
+model_name = "pythia-160m"
 model = load_model(model_name)
 
-text = "Which number is greater: 3 or 5?"
+prompt_id = ""
+text = "Which number is greater: 5 or 3?"
 tokens = model.to_tokens(text)
 tokens_str = model.to_str_tokens(tokens)
 
@@ -60,5 +61,5 @@ os.makedirs(output_folder, exist_ok=True)
 df_stats = pd.DataFrame(all_stats)
 print(df_stats)
 
-csv_path = os.path.join(output_folder, f"{model_name}_attention_pattern.csv")
+csv_path = os.path.join(output_folder, f"{model_name} - {text}.csv")
 df_stats.to_csv(csv_path, index=False)
