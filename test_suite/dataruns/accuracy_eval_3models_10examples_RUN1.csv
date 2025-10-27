@@ -1,4 +1,0 @@
-model_name,accuracy
-gpt2,50.0
-EleutherAI/pythia-70m,50.0
-EleutherAI/pythia-160m,50.0
