@@ -52,6 +52,7 @@ COMMON_MODELS = {
     "qwen2-1.5b": "Qwen/Qwen2-1.5B",
     "qwen2-7b": "Qwen/Qwen2-7B",
     "qwen2-72b": "Qwen/Qwen2-72B",
+    "qwen2.5-3b": "Qwen/Qwen2.5-3B",
     "qwen2.5-7b": "Qwen/Qwen2.5-7B",
     "qwen2.5-32b": "Qwen/Qwen2.5-32B",
     "qwen2.5-72b": "Qwen/Qwen2.5-72B",
