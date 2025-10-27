@@ -12,6 +12,9 @@ from typing import Callable, Dict, Any, Optional
 import circuitsvis as cv
 import einops
 import numpy as np
+import pandas as pd
+import pyarrow.parquet as pq
+import yaml
 import torch as t
 import torch.nn as nn
 import torch.nn.functional as F

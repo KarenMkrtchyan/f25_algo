@@ -2,6 +2,11 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+import re
+import pandas as pd
+import pyarrow.parquet as pq
+import yaml
+import torch as t
 from utils import Setup
 from utils.model_config import load_model
 from utils.Setup import Float, Int, Tensor, HookPoint, t, einops, cv, display, HookedTransformer, Callable, functools, tqdm, utils
@@ -494,16 +499,17 @@ def activation_patch(
 
     return result if return_logits else (result, clean_cache, corrupted_cache)
 
-def attach_head_ablation_hooks(model: HookedTransformer, layers: list[int], heads: list[int]):
+def attach_head_ablation_hooks(model_name: str, layers: list[int], heads: list[int]):
     """
     Attach hooks to zero out specific heads in specific layers.
 
     Args:
-        model (HookedTransformer): Pretrained model
+        model_name: str name of hooked transforemr
         layers (list[int]): List of layer indices to ablate
         heads (list[int]): List of head indices to ablate in each layer
     """
 
+    model = load_model(model_name)
     for layer in layers:
         hook_name = f"blocks.{layer}.attn.hook_z" 
         for head in heads:
@@ -514,4 +520,237 @@ def attach_head_ablation_hooks(model: HookedTransformer, layers: list[int], head
 
     return model
 
+def get_top_ablated_heads(concat_df: pd.DataFrame, n: int = 10, group_by: str = "mean"):
+    """
+    Run ablation analysis and return the top n most important heads.
+
+    Args:
+        model: HookedTransformer model
+        text (str): Prompt text
+        threshold (float): Minimum importance value to consider a head
+        n (int): Number of top heads to return
+        layers_to_ablate (list[int], optional): layers to ablate
+        heads_to_ablate (list[int], optional): heads to ablate
+    Returns:
+        pd.DataFrame: Top heads with columns ["layer", "head", "importance"]
+    """
+    
+    if group_by not in ["mean", "max", "min", "sum"]:
+        raise ValueError("group_by must be either 'mean', 'max', 'min', or 'sum'")
+
+    if not all(col in concat_df.columns for col in ["layer", "head", "importance"]):
+        raise ValueError("concat_df must contain columns: 'layer', 'head', 'importance'")
+
+    grouped = concat_df.groupby(["layer", "head"], as_index=False).agg({
+        "importance": group_by,
+    })
+
+    filtered_df = grouped.sort_values("importance", ascending=False)
+    top_heads = filtered_df.head(n)
+    
+    layers_list = top_heads["layer"].tolist()
+    heads_list = top_heads["head"].tolist()
+    ablation_scores = top_heads["importance"].tolist()
+
+    return top_heads, layers_list, heads_list, ablation_scores
+def attention_pattern(model_name, text):
+
+    model = load_model(model_name)
+
+    tokens = model.to_tokens(text)
+    tokens_str = model.to_str_tokens(tokens)
+
+    logits, cache = model.run_with_cache(tokens)
+
+    tokens_str = model.to_str_tokens(tokens)
+    for i, tok in enumerate(tokens_str):
+        print(i, repr(tok))
+
+    def is_relevant(tok: str) -> bool:
+        t_clean = tok.lstrip('▁')  # remove leading space
+        return bool(re.search(r'\d', t_clean)) or t_clean in [" greater", "less", ">", "<", "="]
+
+    relevant_tokens = [i for i, tok in enumerate(tokens_str) if is_relevant(tok)]
+    print("Relevant token indices:", relevant_tokens)
+
+
+    all_stats = []
+    for layer in range(model.cfg.n_layers):
+        key_name = f"blocks.{layer}.attn.hook_pattern"
+        attn = cache[key_name][0]
+
+        for head in range(model.cfg.n_heads):
+            attn_head = attn[head]
+            if len(relevant_tokens) > 0:
+                attn_relevant = attn_head[relevant_tokens, :][:, relevant_tokens]
+                mean_val = t.mean(attn_relevant).item()
+                min_val = t.min(attn_relevant).item()
+                max_val = t.max(attn_relevant).item()
+            else:
+                mean_val = min_val = max_val = None
+
+            all_stats.append({
+                "layer": layer,
+                "head": head,
+                "mean": mean_val,
+                "min": min_val,
+                "max": max_val
+            })
+            
+    df_stats = pd.DataFrame(all_stats)
+    return df_stats
+
+def concatenated_ablation_patterns(
+    model_name: str,
+    yaml_path: str,
+    n_examples: int = 10,
+    n_shots: int = 0,
+):
+    """
+    Runs a model through prompts defined in a YAML task file, collecting 
+    attention weights for each layer and head.
+
+    Args:
+        model_name: str for HookedTransformer Model.
+        yaml_path: Path to YAML task file.
+        n_examples: Number of examples to evaluate.
+        n_shots: Number of few-shot examples (0 for zero-shot).
+
+    Returns:
+        concat_df: Combined DataFrame of all examples.
+        individual_dfs: List of per-example DataFrames.
+    """
+
+    model = load_model(model_name)
+
+    with open(yaml_path, "r") as f:
+        task_cfg = yaml.safe_load(f)
+    data_path = task_cfg["dataset_kwargs"]["data_files"][0]
+
+    dataset = pq.read_table(data_path).to_pandas()
+    dataset = dataset.sample(n=min(n_examples, len(dataset)), random_state=42)
+
+    def build_prompt(row, dataset_subset):
+        a, b = row["a"], row["b"]
+        base = f"Is {a} > {b}? Answer:"
+        if n_shots <= 0:
+            return base
+        else:
+            few = dataset_subset.sample(n=n_shots)
+            shots = "\n".join(
+                [f"Is {r.a} > {r.b}? Answer: {'Yes' if r.a > r.b else 'No'}"
+                 for _, r in few.iterrows()]
+            )
+            return shots + "\n" + base
+
+    all_results = []
+    individual_results = []
+
+    for i, row in dataset.iterrows():
+        prompt = build_prompt(row, dataset)
+        
+        results = run_model_with_ablation_analysis(model, prompt)
+        results_df = pd.DataFrame(results["important_heads"], columns=["layer", "head", "importance"])
+        results_df["example_id"] = i
+        results_df["n_shots"] = n_shots
+        results_df["prompt"] = prompt
+
+        individual_results.append(results_df)
+        all_results.append(results_df)
+
+    concat_df = pd.concat(all_results, ignore_index=True)
+    return concat_df, individual_results
+
+def concatenated_attention_patterns(
+    model_name: str,
+    yaml_path: str,
+    n_examples: int = 10,
+    n_shots: int = 0,
+):
+    """
+    Runs a model through prompts defined in a YAML task file, collecting 
+    attention weights for each layer and head.
+
+    Args:
+        model_name: str for HookedTransformer Model.
+        yaml_path: Path to YAML task file.
+        n_examples: Number of examples to evaluate.
+        n_shots: Number of few-shot examples (0 for zero-shot).
+
+    Returns:
+        concat_df: Combined DataFrame of all examples.
+        individual_dfs: List of per-example DataFrames.
+    """
+
+    with open(yaml_path, "r") as f:
+        task_cfg = yaml.safe_load(f)
+    data_path = task_cfg["dataset_kwargs"]["data_files"][0]
+
+    dataset = pq.read_table(data_path).to_pandas()
+    dataset = dataset.sample(n=min(n_examples, len(dataset)), random_state=42)
+
+    def build_prompt(row, dataset_subset):
+        a, b = row["a"], row["b"]
+        base = f"Is {a} > {b}? Answer:"
+        if n_shots <= 0:
+            return base
+        else:
+            few = dataset_subset.sample(n=n_shots)
+            shots = "\n".join(
+                [f"Is {r.a} > {r.b}? Answer: {'Yes' if r.a > r.b else 'No'}"
+                 for _, r in few.iterrows()]
+            )
+            return shots + "\n" + base
+
+    all_results = []
+    individual_results = []
+
+    for i, row in dataset.iterrows():
+        prompt = build_prompt(row, dataset)
+        
+        df_stats = attention_pattern(model_name, prompt)
+        df_stats["example_id"] = i
+        df_stats["n_shots"] = n_shots
+        df_stats["prompt"] = prompt
+
+        individual_results.append(df_stats)
+        all_results.append(df_stats)
+
+    concat_df = pd.concat(all_results, ignore_index=True)
+    return concat_df, individual_results
+
+def get_top_attention_heads(concat_df: pd.DataFrame, n: int = 10, sort_by: str = "mean", group_by: str = "mean"):
+    """
+    Get the top-n attention heads based on their mean or max attention values.
+
+    Args:
+        concat_df (pd.DataFrame): Concatenated DataFrame with columns ['layer', 'head', 'mean', 'min', 'max'].
+        n (int): Number of top heads to select.
+        sort_by (str): Metric to rank heads by — either 'mean' or 'max'.
+
+    Returns:
+        top_heads_df (pd.DataFrame): Sorted DataFrame of top-n attention heads.
+        top_positions (list[tuple[int, int]]): List of (layer, head) positions of top-n heads.
+    """
+
+    if sort_by not in ["mean", "max"]:
+        raise ValueError("sort_by must be either 'mean' or 'max'")
+    
+    if group_by not in ["mean", "max", "min", "sum"]:
+        raise ValueError("group_by must be either 'mean', 'max', 'min', or 'sum'")
+
+    if not all(col in concat_df.columns for col in ["layer", "head", "mean", "min", "max"]):
+        raise ValueError("concat_df must contain columns: 'layer', 'head', 'mean', 'min', 'max'")
+
+    grouped = concat_df.groupby(["layer", "head"], as_index=False).agg({
+        sort_by: group_by,
+    })
+
+    top_heads_df = grouped.sort_values(by=sort_by, ascending=False).head(n).reset_index(drop=True)
+
+    top_layers = top_heads_df["layer"].tolist()
+    top_heads = top_heads_df["head"].tolist()
+    attention_scores = top_heads_df[sort_by].tolist()
+
+    return top_heads_df, top_layers, top_heads, attention_scores
 

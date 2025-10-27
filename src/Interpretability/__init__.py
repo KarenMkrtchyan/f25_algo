@@ -20,7 +20,13 @@ from .Functions import (
     run_model_with_ablation_analysis,
     display_attention_patterns,
     display_attention_heads,
-    visualize_neuron_activation
+    visualize_neuron_activation,
+    get_top_ablated_heads,
+    get_top_attention_heads,
+    attach_head_ablation_hooks,
+    attention_pattern,
+    concatenated_attention_patterns,
+    concatenated_ablation_patterns
 )
 
 # Version information

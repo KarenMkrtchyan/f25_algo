@@ -13,9 +13,13 @@ dataset_kwargs:
     - "{DATA}"
 validation_split: train
 output_type: multiple_choice
-doc_to_text: "{{{{a}}}} > {{{{b}}}}? Answer:"
+doc_to_text: "Is {{{{a}}}} > {{{{b}}}}? Answer:"
 doc_to_choice: ["Yes", "No"]
 doc_to_target: "{{{{ 0 if (a > b) else 1 }}}}"
 """
+Path("tasks/greater_than").mkdir(parents=True, exist_ok=True)
+
 with open("tasks/greater_than/greater_than.yaml", "w") as f:
     f.write(YAML_greater_than_string)
+
+# %%
