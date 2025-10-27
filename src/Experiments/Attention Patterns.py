@@ -16,5 +16,11 @@ results_folder = "Results"
 output_folder = os.path.join(results_folder, "Attention Patterns")
 os.makedirs(output_folder, exist_ok=True)
 
+<<<<<<< HEAD
+=======
+df_stats = pd.DataFrame(all_stats)
+print(df_stats)
+
+>>>>>>> e79ba8158318126264c9ba7d53ae6d5e0a879b66
 csv_path = os.path.join(output_folder, f"{model_name} - {text}.csv")
 df_stats.to_csv(csv_path, index=False)
