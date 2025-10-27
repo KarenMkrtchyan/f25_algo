@@ -4,7 +4,7 @@ dataset_path: parquet
 dataset_name: null
 dataset_kwargs:
   data_files:
-    - "/Users/julianramirez/Desktop/code/algo/f25_algo/output/data1-00000.parquet"
+    - "/Users/aryabhardia/Desktop/Algoverse/f25_algo/output/data1-00000.parquet"
 validation_split: train
 output_type: multiple_choice
 doc_to_text: "{{a}} > {{b}}? Answer:"
