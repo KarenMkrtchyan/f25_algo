@@ -1,18 +1,41 @@
-# Fall 25 Algoverse Research Project
+# Understanding universality across different families of LLMs by exploring internal circuits
 
-Julian, Karen, Arya, Syd, Akhil
+This is the code for an upcoming paper about the universality theorem examed under mechanistic interpretability
+and causality lense
+
+## Contributors (in no particular order)
+
+Julian Ramirez, Karen Mkrtchyan, Arya Bhardia, Syd Verma, Akhil Jalan
 
 ## Setup
 
-1. Activate virtual enviorment
-   `python -m venv venv`
-   macOs / Linux
-   `source venv/bin/activate`
-   Windows
-   `venv\Scripts\Activate.ps1`
-2. Install dependencies
-   `pip install -r requirements.txt`
+### Conda env
 
-# TODOs
+```
+conda create --name cellpose python=3.10
+conda activate cellpose
+```
 
-fix version numbering in req.txt ( did someone delete it for no reason?? )
+### Install reqs
+
+```
+python -m pip install -r requirements.txt
+```
+
+### Run
+
+Project in active development, don't run me yet
+
+## Project Structure
+
+```
+project/
+├── output/
+   # under construction
+├── src/
+   ├──fisher_score/              # pipeline and utils to calculate fisher scores (relevance of each neuron)
+   # under construction
+├── test_suite/
+   # under construction
+├── requirements.txt             # pip install me
+```
