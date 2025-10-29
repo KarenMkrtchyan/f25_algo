@@ -5,6 +5,7 @@ Julian, Karen, Arya, Syd, Akhil
 ## Setup
 
 1. Activate virtual enviorment
+   `python -m venv venv`
    macOs / Linux
    `source venv/bin/activate`
    Windows
@@ -14,4 +15,4 @@ Julian, Karen, Arya, Syd, Akhil
 
 # TODOs
 
-fix version numbering in req.txt
+fix version numbering in req.txt ( did someone delete it for no reason?? )
