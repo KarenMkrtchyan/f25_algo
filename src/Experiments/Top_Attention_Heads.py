@@ -1,3 +1,4 @@
+#%%
 import sys
 import os
 import pandas as pd
@@ -58,3 +59,5 @@ plt.savefig(plot_path, dpi=300, bbox_inches="tight")
 plt.show()
 
 ablated_model = attach_head_ablation_hooks(model_name = model_name, layers = layers_list, heads = heads_list)
+
+# %%
