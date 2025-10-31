@@ -1,3 +1,4 @@
+#%%
 import sys
 import os
 import pandas as pd
@@ -41,3 +42,5 @@ csv_path = os.path.join(output_folder, f"{model_name} - {task} - {n_examples} ex
 top_heads_df.to_csv(csv_path, index=False)
 
 ablated_model = attach_head_ablation_hooks(model_name = model_name, layers = layers_list, heads = heads_list)
+
+# %%

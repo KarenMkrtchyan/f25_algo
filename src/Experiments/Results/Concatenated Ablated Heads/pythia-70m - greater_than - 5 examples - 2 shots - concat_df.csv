@@ -1,0 +1,388 @@
+layer,head,importance,example_id,n_shots,prompt
+0,2,0.8744583129882812,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+0,3,0.8400154113769531,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+5,3,0.39533233642578125,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+2,5,0.3871307373046875,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+5,1,0.3076362609863281,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+4,4,0.2663307189941406,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+1,4,0.2573356628417969,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+4,1,0.24802780151367188,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+4,2,0.23806381225585938,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+0,7,0.23345565795898438,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+3,2,0.20383453369140625,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+4,3,0.19431686401367188,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+4,5,0.18886184692382812,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+3,7,0.18593978881835938,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+4,0,0.17649459838867188,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+5,5,0.16252899169921875,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+5,6,0.10808563232421875,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+1,7,0.06803512573242188,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+4,6,0.049182891845703125,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+3,5,0.0442657470703125,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+1,1,0.02508544921875,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+2,1,0.013996124267578125,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+5,0,0.012783050537109375,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+5,2,0.010738372802734375,521,2,"Is 9115 > 982? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 7740 > 2273? Answer:"
+0,3,0.9661293029785156,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+0,2,0.7051200866699219,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+2,5,0.4319190979003906,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+3,2,0.37335968017578125,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+5,3,0.32753753662109375,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+5,1,0.2491607666015625,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+0,7,0.22745895385742188,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+1,4,0.19615936279296875,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+4,4,0.19126129150390625,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+4,3,0.18116378784179688,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+2,1,0.16366958618164062,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+5,5,0.15533065795898438,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+4,5,0.13983154296875,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+4,1,0.11273956298828125,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+4,0,0.10428619384765625,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+3,7,0.10411834716796875,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+4,2,0.10184097290039062,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+5,6,0.10056686401367188,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+1,1,0.09846878051757812,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+1,7,0.06272506713867188,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+5,0,0.03429412841796875,737,2,"Is 9189 > 5325? Answer: Yes
+Is 4055 > 7546? Answer: No
+Is 3648 > 56? Answer:"
+0,2,0.7838554382324219,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+0,3,0.6989059448242188,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+2,5,0.3786964416503906,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+5,3,0.36869049072265625,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+0,7,0.3235969543457031,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+5,1,0.315338134765625,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+1,4,0.2880363464355469,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+4,2,0.2540168762207031,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+4,4,0.23734283447265625,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+1,1,0.21092605590820312,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+4,0,0.19496536254882812,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+4,5,0.17956161499023438,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+4,3,0.1743316650390625,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+5,5,0.16427230834960938,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+4,1,0.1558074951171875,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+2,1,0.1140899658203125,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+5,6,0.10417556762695312,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+1,7,0.09886550903320312,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+3,7,0.08255386352539062,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+3,2,0.08240509033203125,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+1,6,0.07010650634765625,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+4,6,0.055419921875,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+2,4,0.0376739501953125,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+5,0,0.026905059814453125,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+4,7,0.02518463134765625,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+3,0,0.02005767822265625,740,2,"Is 4055 > 7546? Answer: No
+Is 7740 > 2273? Answer: Yes
+Is 4055 > 7546? Answer:"
+0,2,0.8496170043945312,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+0,3,0.84295654296875,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+2,5,0.6337699890136719,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+0,7,0.5679359436035156,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+1,4,0.4418487548828125,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+5,3,0.3672065734863281,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+3,2,0.3075675964355469,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+2,1,0.2746734619140625,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+5,1,0.2698402404785156,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+4,4,0.23040390014648438,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+1,7,0.20566940307617188,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+4,3,0.16743087768554688,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+3,7,0.16461563110351562,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+4,1,0.1518096923828125,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+2,3,0.14499282836914062,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+5,5,0.14188385009765625,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+4,2,0.13623046875,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+4,0,0.133270263671875,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+4,5,0.12685012817382812,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+1,1,0.12656402587890625,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+5,6,0.09502792358398438,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+2,4,0.063873291015625,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+1,6,0.06262969970703125,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+5,2,0.0156402587890625,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+4,7,0.01439666748046875,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+5,0,0.012775421142578125,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+4,6,0.011928558349609375,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+1,2,0.01132965087890625,660,2,"Is 3648 > 56? Answer: Yes
+Is 9115 > 982? Answer: Yes
+Is 9189 > 5325? Answer:"
+0,2,0.8682136535644531,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+0,3,0.7381706237792969,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+2,5,0.5129470825195312,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+0,7,0.4754829406738281,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+5,3,0.3596382141113281,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+1,4,0.2805824279785156,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+5,1,0.24204635620117188,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+1,1,0.23409652709960938,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+3,2,0.20952987670898438,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+4,2,0.18982315063476562,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+2,1,0.184661865234375,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+4,4,0.17905044555664062,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+4,3,0.15416336059570312,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+0,0,0.13830184936523438,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+4,0,0.13604354858398438,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+4,1,0.13495635986328125,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+1,7,0.13459396362304688,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+5,5,0.10424041748046875,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+5,6,0.08785247802734375,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+3,7,0.08113479614257812,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+4,5,0.07831954956054688,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+1,6,0.061206817626953125,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+2,3,0.05297088623046875,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+3,3,0.032436370849609375,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+1,2,0.03136444091796875,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+4,6,0.0308990478515625,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+4,7,0.023662567138671875,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+2,4,0.023571014404296875,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+3,6,0.02024078369140625,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
+5,0,0.0126800537109375,411,2,"Is 3648 > 56? Answer: Yes
+Is 7740 > 2273? Answer: Yes
+Is 9115 > 982? Answer:"
