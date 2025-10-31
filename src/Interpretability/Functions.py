@@ -567,8 +567,8 @@ def attention_pattern(model_name, text):
         print(i, repr(tok))
 
     def is_relevant(tok: str) -> bool:
-        t_clean = tok.lstrip('▁')  # remove leading space
-        return bool(re.search(r'\d', t_clean)) or t_clean in [" greater", "less", ">", "<", "="]
+        t_clean = tok.lstrip('▁')
+        return bool(re.search(r'\d', t_clean)) or t_clean in [" greater", "greater", "greater ", " less", "less ", "less", ">", " >", "> ", "<", " <", "< " "="]
 
     relevant_tokens = [i for i, tok in enumerate(tokens_str) if is_relevant(tok)]
     print("Relevant token indices:", relevant_tokens)
@@ -682,6 +682,8 @@ def concatenated_attention_patterns(
         individual_dfs: List of per-example DataFrames.
     """
 
+    model = load_model(model_name)
+
     with open(yaml_path, "r") as f:
         task_cfg = yaml.safe_load(f)
     data_path = task_cfg["dataset_kwargs"]["data_files"][0]
@@ -708,7 +710,7 @@ def concatenated_attention_patterns(
     for i, row in dataset.iterrows():
         prompt = build_prompt(row, dataset)
         
-        df_stats = attention_pattern(model_name, prompt)
+        df_stats = attention_pattern_toward_each_token(model, prompt)
         df_stats["example_id"] = i
         df_stats["n_shots"] = n_shots
         df_stats["prompt"] = prompt
@@ -719,7 +721,7 @@ def concatenated_attention_patterns(
     concat_df = pd.concat(all_results, ignore_index=True)
     return concat_df, individual_results
 
-def get_top_attention_heads(concat_df: pd.DataFrame, n: int = 10, sort_by: str = "mean", group_by: str = "mean"):
+def get_top_attention_heads(concat_df: pd.DataFrame, n: int = 10, sort_by: str = "mean_attention_toward", group_by: str = "mean"):
     """
     Get the top-n attention heads based on their mean or max attention values.
 
@@ -733,14 +735,11 @@ def get_top_attention_heads(concat_df: pd.DataFrame, n: int = 10, sort_by: str =
         top_positions (list[tuple[int, int]]): List of (layer, head) positions of top-n heads.
     """
 
-    if sort_by not in ["mean", "max"]:
+    if sort_by not in ["mean_attention_toward", "max_attention_toward"]:
         raise ValueError("sort_by must be either 'mean' or 'max'")
     
     if group_by not in ["mean", "max", "min", "sum"]:
         raise ValueError("group_by must be either 'mean', 'max', 'min', or 'sum'")
-
-    if not all(col in concat_df.columns for col in ["layer", "head", "mean", "min", "max"]):
-        raise ValueError("concat_df must contain columns: 'layer', 'head', 'mean', 'min', 'max'")
 
     grouped = concat_df.groupby(["layer", "head"], as_index=False).agg({
         sort_by: group_by,
@@ -753,4 +752,44 @@ def get_top_attention_heads(concat_df: pd.DataFrame, n: int = 10, sort_by: str =
     attention_scores = top_heads_df[sort_by].tolist()
 
     return top_heads_df, top_layers, top_heads, attention_scores
+
+def attention_pattern_toward_each_token(model, text):
+    tokens = model.to_tokens(text)
+    tokens_str = model.to_str_tokens(tokens)
+    logits, cache = model.run_with_cache(tokens)
+
+    print("Token indices:")
+    for i, tok in enumerate(tokens_str):
+        print(i, repr(tok))
+
+    def is_relevant(tok: str) -> bool:
+        t_clean = tok.lstrip('▁')
+        return bool(re.search(r'\d', t_clean)) or t_clean in [" greater", "greater", "greater ", " less", "less ", "less", ">", " >", "> ", "<", " <", "< " "="]
+
+    relevant_indices = [i for i, tok in enumerate(tokens_str) if is_relevant(tok)]
+    print("Relevant token indices:", relevant_indices)
+
+    all_stats = []
+
+    for layer in range(model.cfg.n_layers):
+        attn = cache[f"blocks.{layer}.attn.hook_pattern"][0]
+
+        for head in range(model.cfg.n_heads):
+            attn_head = attn[head]
+
+            for target_idx in relevant_indices:
+                mean_to_token = attn_head[:, target_idx].mean().item()
+                max_to_token = attn_head[:, target_idx].max().item()
+
+                all_stats.append({
+                    "layer": layer,
+                    "head": head,
+                    "target_index": target_idx,
+                    "target_token": tokens_str[target_idx],
+                    "mean_attention_toward": mean_to_token,
+                    "max_attention_toward": max_to_token,
+                })
+
+    df = pd.DataFrame(all_stats)
+    return df
 
