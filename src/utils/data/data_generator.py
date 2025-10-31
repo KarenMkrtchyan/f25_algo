@@ -1,3 +1,4 @@
+#%%
 import random
 from typing import Dict
 
@@ -13,10 +14,10 @@ class DataGenerator:
         return {"text": f"{a} {op} {b}", "label": label, "a": a, "b": b, "op": op}
 
     def synthetic_data_one(self, size: int) -> list[dict]:
-        return [self._sample(0, 10_000) for _ in range(size)]
+        return [self._sample(10000, 99999) for _ in range(size)]
 
     def synthetic_data_two(self, size: int) -> list[dict]:
-        ranges = [(0, 9), (10, 99), (100, 999), (1000, 9999), (10000, 99999), (0, 99999)]
+        ranges = [(0, 9), (10, 99), (100, 999), (1000, 9999), (10000, 99999), (0, 99999), (100000, 999999)]
         chunks = size // len(ranges)
         data = []
         for low, high in ranges:
@@ -26,3 +27,5 @@ class DataGenerator:
         while len(data) < size:
             data.append(self._sample(0, 99_999))
         return data
+
+# %%

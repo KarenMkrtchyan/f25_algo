@@ -1,14 +1,20 @@
+#%%
 import sys
 import os
 import pandas as pd
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from utils import Setup
+from pathlib import Path
+from tl_eval.lm_evaluator import evaluate_lm_eval
+import torch
 
 from utils.model_config import load_model
 from Interpretability import concatenated_ablation_patterns, get_top_ablated_heads, attach_head_ablation_hooks
 
 model_name = "pythia-70m"
-yaml_path = "tasks/greater_than/greater_than.yaml"
+
+ROOT = Path(__file__).resolve().parents[2]                       # repo root
+yaml_path =(ROOT/ "test_suite" / "tasks" / "greater_than" / "greater_than.yaml").as_posix()
 n_examples = 5
 n_shots = 2
 
@@ -25,8 +31,8 @@ results_folder = "Results"
 output_folder = os.path.join(results_folder, "Concatenated Ablated Heads")
 os.makedirs(output_folder, exist_ok=True)
 
-csv_path = os.path.join(output_folder, f"{model_name} - {task} - {n_examples} examples - {n_shots} shots - concat_df.csv")
-concat_df.to_csv(csv_path, index=False)
+#csv_path = os.path.join(output_folder, f"{model_name} - {task} - {n_examples} examples - {n_shots} shots - concat_df.csv")
+#concat_df.to_csv(csv_path, index=False)
 
 group_by = "sum"
 n = 10
@@ -36,7 +42,11 @@ print(layers_list)
 print(heads_list)
 print(ablation_scores)
 
-csv_path = os.path.join(output_folder, f"{model_name} - {task} - {n_examples} examples - {n_shots} shots - top_{n}_ablated_heads_df.csv")
-top_heads_df.to_csv(csv_path, index=False)
+#csv_path = os.path.join(output_folder, f"{model_name} - {task} - {n_examples} examples - {n_shots} shots - top_{n}_ablated_heads_df.csv")
+#top_heads_df.to_csv(csv_path, index=False)
 
 ablated_model = attach_head_ablation_hooks(model_name = model_name, layers = layers_list, heads = heads_list)
+torch.cuda.empty_cache()
+results = evaluate_lm_eval(ablated_model, task_names=["greater_than"], num_fewshot=5, limit=1000)
+
+# %%
