@@ -9,9 +9,13 @@ from utils import Setup
 
 from utils.model_config import load_model
 from Interpretability import concatenated_attention_patterns, get_top_attention_heads, attach_head_ablation_hooks
+import torch
+from test_suite.eval import run_benchmark
 
-model_name = "qwen2.5-3b"
-yaml_path = "tasks/greater_than/greater_than.yaml"
+torch.cuda.empty_cache()
+
+model_name = "qwen2.5-7b"
+yaml_path = "../test_suite/tasks/greater_than/greater_than.yaml"
 n_examples = 5
 n_shots = 0
 
@@ -59,5 +63,13 @@ plt.savefig(plot_path, dpi=300, bbox_inches="tight")
 plt.show()
 
 ablated_model = attach_head_ablation_hooks(model_name = model_name, layers = layers_list, heads = heads_list)
+#%% Run accuracy benchmark on ablated model
 
-# %%
+
+df = run_benchmark(
+    models=[ablated_model],
+    task_name="greater_than",
+    limit=1000,
+    output_dir= "../test_suite/dataruns/benchmarks",
+    run=1
+)

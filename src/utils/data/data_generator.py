@@ -14,7 +14,7 @@ class DataGenerator:
         return {"text": f"{a} {op} {b}", "label": label, "a": a, "b": b, "op": op}
 
     def synthetic_data_one(self, size: int) -> list[dict]:
-        return [self._sample(10000, 99999) for _ in range(size)]
+        return [self._sample(0, 9999) for _ in range(size)]
 
     def synthetic_data_two(self, size: int) -> list[dict]:
         ranges = [(0, 9), (10, 99), (100, 999), (1000, 9999), (10000, 99999), (0, 99999), (100000, 999999)]

@@ -1,5 +1,0 @@
-model_name,accuracy
-google/gemma-3-270m,48.3
-google/gemma-3-1b-it,70.7
-google/gemma-3-4b-it,100.0
-google/gemma-2-2b,74.8
