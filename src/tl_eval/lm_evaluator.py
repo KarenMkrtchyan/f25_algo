@@ -55,5 +55,7 @@ def evaluate_lm_eval(lens_model: HookedTransformer, task_names: list[str], **kwa
         verbosity="WARNING",
         **kwargs,
     )
+    accuracy = results["results"]["greater_than"]["acc,none"] * 100
+    print(accuracy)
     return results
 # %%
