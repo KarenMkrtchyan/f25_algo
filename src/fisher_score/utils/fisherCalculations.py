@@ -159,7 +159,7 @@ class FisherCalculations:
 
         for _, stats in self.class_stats.items():
             n_c = stats["n"]
-            mu_ic = stats["mean"].to(device)
+            mu_ic = stats["mean"].to(device) # type: ignore
             var_ic = stats["var"].to(device)
 
             between_sum += n_c * (mu_ic - self.global_mean) ** 2
