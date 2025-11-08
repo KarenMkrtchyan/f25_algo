@@ -22,10 +22,11 @@ for cfg in modelslist:
     # TODO: Run the model once with the prompts, catche the activations, and run the fisher calculations on that
 
     model_fisher = FisherCalculations(model=model, data=groups, device=device, layer=cfg['start_layer'])
-    model_fisher.calc_in_class_stats_single_pass(digit_position='units')
-    model_fisher.calc_global_mean()
-    model_fisher.calc_between_class_var()
-    fisher_scores = model_fisher.calc_fisher()
+    for digit in ["hundreds", "tens", "units"]:
+        model_fisher.calc_in_class_stats_single_pass(digit_position='units')
+        model_fisher.calc_global_mean()
+        model_fisher.calc_between_class_var()
+        fisher_scores = model_fisher.calc_fisher()
     # Example: get top-10 neurons for this layer
     # topk_vals, topk_idx = torch.topk(fisher_scores, k=10)
     # print(f"Top neurons (layer={cfg['start_layer']}):", list(zip(topk_idx.tolist(), topk_vals.tolist())))
