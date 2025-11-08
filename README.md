@@ -12,14 +12,14 @@ Julian Ramirez, Karen Mkrtchyan, Arya Bhardia, Syd Verma, Akhil Jalan
 ### Conda env
 
 ```
-conda create --name cellpose python=3.10
-conda activate cellpose
+conda create --name env python=3.10
+conda activate env
 ```
 
 ### Install reqs
 
 ```
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ### Run
