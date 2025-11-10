@@ -2,6 +2,7 @@ import torch
 from transformer_lens import HookedTransformer
 from tqdm import tqdm
 from typing import Dict, List, DefaultDict, Literal, Union
+import numpy as np
 
 DigitPosition = Literal["hundreds", "tens", "units"]
 
@@ -27,7 +28,8 @@ class FisherCalculations:
         model: HookedTransformer,
         data: DefaultDict[str, DefaultDict[str, List[Dict]]],
         device: str,
-        layer: int = 15,
+        start_layer: int = 15,
+        end_layer: int = 30,
         batch_size: int = 64
     ) -> None:
         if model.tokenizer is None:
@@ -36,7 +38,8 @@ class FisherCalculations:
         self.model = model
         self.data = data
         self.device = device
-        self.layer = layer
+        self.start_layer = start_layer
+        self.end_layer = end_layer
         self.batch_size = batch_size
 
         self.class_stats: Dict[str, Dict[str, Union[torch.Tensor, int]]] = {}
@@ -69,18 +72,22 @@ class FisherCalculations:
                 with torch.no_grad():
                     logits, cache = self.model.run_with_cache(tokens, remove_batch_dim=False)
 
-                activations = cache["mlp_out", self.layer]  # [batch, seq_len, n_neurons]
+                all_acts_batch = []
+                for layer in range(self.start_layer, self.end_layer):
+                    activations = cache["mlp_out", layer]  # [batch, seq_len, n_neurons]
 
-                # Get final token activations for each sequence
-                seq_lens = (tokens != self.model.tokenizer.pad_token_id).sum(dim=1)  # type: ignore
-                last_token_acts = activations[
-                    torch.arange(len(batch_prompts), device=self.device), seq_lens - 1, :
-                ]
+                    # Get final token activations for each sequence
+                    seq_lens = (tokens != self.model.tokenizer.pad_token_id).sum(dim=1)  # type: ignore
+                    last_token_acts = activations[
+                        torch.arange(len(batch_prompts), device=self.device), seq_lens - 1, :
+                    ]
+                    all_acts_batch.append(last_token_acts)  # Append each layer's activations
 
-                all_acts.append(last_token_acts.detach().cpu())
+                all_acts_batch = torch.stack(all_acts_batch, dim=1)  # [batch, n_layers, n_neurons]
+                all_acts.append(all_acts_batch.detach().cpu())
 
                 # Clean up GPU memory
-                del logits, cache, activations, last_token_acts
+                del logits, cache
                 torch.cuda.empty_cache()
 
             # Combine results for this class
@@ -104,14 +111,15 @@ class FisherCalculations:
         if not self.class_stats:
             raise ValueError("Run calc_in_class_stats() before computing global mean.")
 
-        n_neurons = next(iter(self.class_stats.values()))["mean"].shape[0]
-        device = self.device
-        weighted_sum = torch.zeros(n_neurons, device=device)
+        first_mean = next(iter(self.class_stats.values()))["mean"]
+        n_layers, n_neurons = first_mean.shape # type: ignore
+
+        weighted_sum = torch.zeros(n_neurons)
         total_samples = 0
 
         for _, stats in self.class_stats.items():
-            n = stats["n"]
-            weighted_sum += stats["mean"].to(device) * n
+            n = stats["n"] 
+            weighted_sum += stats["mean"] * n 
             total_samples += n
 
         self.global_mean = weighted_sum / total_samples
@@ -126,14 +134,13 @@ class FisherCalculations:
         if self.global_mean is None:
             raise ValueError("Run calc_global_mean() before computing between-class variance.")
 
-        n_neurons = self.global_mean.shape[0]
-        device = self.global_mean.device
-        numerator_sum = torch.zeros(n_neurons, device=device)
+        n_layers, n_neurons = self.global_mean.shape
+        numerator_sum = torch.zeros((n_layers, n_neurons))
         total_samples = 0
 
         for _, stats in self.class_stats.items():
             n = stats["n"]
-            mean_vec = stats["mean"].to(device)
+            mean_vec = stats["mean"]
             numerator_sum += n * (mean_vec - self.global_mean) ** 2
             total_samples += n
 
@@ -142,7 +149,7 @@ class FisherCalculations:
     # -------------------------------------------------------------------------
     # Step 4: Compute Fisher scores for all neurons
     # -------------------------------------------------------------------------
-    def calc_fisher(self) -> torch.Tensor:
+    def calc_fisher(self) -> np.ndarray:
         """
         Compute Fisher scores for all neurons using previously computed stats.
         Returns a tensor of shape [n_neurons].
@@ -151,19 +158,18 @@ class FisherCalculations:
             raise ValueError("Run calc_global_mean() before computing Fisher scores.")
 
         eps = 1e-12
-        n_neurons = self.global_mean.shape[0]
-        device = self.global_mean.device
+        n_layers, n_neurons = self.global_mean.shape
 
-        between_sum = torch.zeros(n_neurons, device=device)
-        within_sum = torch.zeros(n_neurons, device=device)
+        between_sum = torch.zeros((n_layers, n_neurons))
+        within_sum = torch.zeros((n_layers, n_neurons))
 
         for _, stats in self.class_stats.items():
             n_c = stats["n"]
-            mu_ic = stats["mean"].to(device) # type: ignore
-            var_ic = stats["var"].to(device)
+            mu_ic = stats["mean"]
+            var_ic = stats["var"]
 
             between_sum += n_c * (mu_ic - self.global_mean) ** 2
             within_sum += n_c * var_ic
 
         fisher_scores = between_sum / (within_sum + eps)
-        return fisher_scores.cpu()
+        return fisher_scores.cpu().numpy() # shape [n_layers, n_neurons]
