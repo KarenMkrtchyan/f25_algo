@@ -19,7 +19,10 @@ login(token=hf_api)
 def run_benchmark(models, task_name, num_fewshot=0, limit=1000, output_dir="dataruns/benchmarks", run=1):
     import os
     torch.cuda.empty_cache()
-    tm = tasks.TaskManager(include_path="./tasks")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    tasks_dir = os.path.join(current_dir, "../test_suite/tasks")
+    tm = tasks.TaskManager(include_path=tasks_dir)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     results = []
@@ -73,3 +76,5 @@ def run_benchmark(models, task_name, num_fewshot=0, limit=1000, output_dir="data
 
     print(f"Results saved in {file_name}")
     return df
+
+# %%
