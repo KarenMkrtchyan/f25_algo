@@ -4,6 +4,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import re
 import pandas as pd
+import matplotlib.pyplot as plt
 import pyarrow.parquet as pq
 import yaml
 import torch as t
@@ -792,4 +793,140 @@ def attention_pattern_toward_each_token(model, text):
 
     df = pd.DataFrame(all_stats)
     return df
+
+def logit_lens_df(model, text, k=5):
+    """
+    Runs a logit lens analysis on a TransformerLens HookedTransformer model
+    and returns a DataFrame showing the top-k predicted tokens per layer.
+    """
+    tokens = model.to_tokens(text)
+    _, cache = model.run_with_cache(tokens)
+
+    records = []
+
+    for layer_idx in range(model.cfg.n_layers):
+        resid = cache["resid_post", layer_idx][0, -1, :]
+        pseudo_logits = resid @ model.W_U + model.b_U
+        top_vals, top_ids = t.topk(pseudo_logits, k=k)
+
+        for rank, (val, idx) in enumerate(zip(top_vals, top_ids), start=1):
+            token_str = repr(model.to_string(idx.unsqueeze(0))).strip("'")
+            records.append({
+                "layer": layer_idx,
+                "rank": rank,
+                "token": token_str,
+                "logit": val.item()
+            })
+
+    return pd.DataFrame(records)
+
+def track_tokens_df(model, text, target_tokens, token_position=-1):
+    """
+    Tracks the pseudo-logits of multiple candidate tokens across all layers 
+    and returns a DataFrame for later analysis/plotting.
+
+    Args:
+        model: HookedTransformer (TransformerLens)
+        text: Input prompt
+        target_tokens: list of candidate strings
+        token_position: int, token index to track (-1 = last token)
+
+    Returns:
+        pd.DataFrame with columns [layer, token, logit]
+    """
+    tokens = model.to_tokens(text)
+    _, cache = model.run_with_cache(tokens)
+    token_ids_dict = {t: model.to_tokens(t)[0] for t in target_tokens}
+
+    records = []
+    
+    for layer_idx in range(model.cfg.n_layers):
+        resid = cache["resid_post", layer_idx][0, token_position, :]
+        pseudo_logits = resid @ model.W_U + model.b_U
+
+        for token_str, ids in token_ids_dict.items():
+            logit_val = pseudo_logits[ids].sum().item() if len(ids) > 1 else pseudo_logits[ids[0]].item()
+            records.append({
+                "layer": layer_idx,
+                "token": token_str,
+                "logit": logit_val
+            })
+
+    df_tokens = pd.DataFrame(records)
+    return df_tokens
+
+def plot_token_logits(df_tokens, path=""):
+    """
+    Plots candidate token pseudo-logits across layers.
+
+    Args:
+        df_tokens: DataFrame from track_tokens_df with columns [layer, token, logit]
+        path: str, if provided saves the plot to this path
+    """
+    import matplotlib.pyplot as plt
+
+    candidates = df_tokens['token'].unique()
+    plt.figure(figsize=(10,5))
+
+    # Plot each candidate
+    for token in candidates:
+        token_df = df_tokens[df_tokens['token'] == token]
+        plt.plot(token_df['layer'], token_df['logit'], marker='o', label=token)
+
+    # Top token per layer
+    top_tokens_per_layer = df_tokens.loc[df_tokens.groupby('layer')['logit'].idxmax()]
+    for _, row in top_tokens_per_layer.iterrows():
+        plt.scatter(row['layer'], row['logit'], s=100, edgecolor='k', facecolor='none', linewidth=1.5)
+
+    # Final layer top token (safe idxmax within layer subset)
+    final_layer = df_tokens['layer'].max()
+    layer_subset = df_tokens[df_tokens['layer'] == final_layer]
+    final_top_token_row = layer_subset.loc[layer_subset['logit'].idxmax()]
+    plt.scatter(final_top_token_row['layer'], final_top_token_row['logit'],
+                s=150, color='red', marker='*', label='Final Top Token')
+
+    plt.xlabel("Layer")
+    plt.ylabel("Pseudo-logit")
+    plt.title("Logit Lens: Candidate Tokens Across Layers")
+    plt.legend()
+    plt.grid(True)
+
+    if path:
+        plt.savefig(path, bbox_inches='tight')
+        print(f"Plot saved to {path}")
+    plt.close()
+
+def test_logit_lens(df_tokens, candidates):
+    """
+    Sanity checks for logit lens outputs restricted to candidate tokens.
+
+    Args:
+        df_tokens: DataFrame from track_tokens_df with columns [layer, token, logit]
+        candidates: list of target tokens
+    """
+    n_layers = df_tokens['layer'].nunique()
+    n_tokens = len(candidates)
+
+    # 1️⃣ Check DataFrame shape
+    expected_rows = n_layers * n_tokens
+    assert df_tokens.shape[0] == expected_rows, f"Expected {expected_rows} rows, got {df_tokens.shape[0]}"
+
+    # 2️⃣ Check all candidate tokens are present
+    df_tokens_set = set(df_tokens['token'].unique())
+    assert df_tokens_set == set(candidates), f"Tokens mismatch. Found: {df_tokens_set}"
+
+    # 3️⃣ Check pseudo-logits vary across layers (not all identical)
+    for token in candidates:
+        token_logits = df_tokens[df_tokens['token']==token]['logit'].values
+        assert len(set(token_logits)) > 1, f"Pseudo-logits do not vary for token '{token}'"
+
+    # 4️⃣ Check top token per layer within candidate subset
+    for layer in range(n_layers):
+        layer_df = df_tokens[df_tokens['layer']==layer]
+        top_token = layer_df.sort_values('logit', ascending=False).iloc[0]['token']
+        top_logit = layer_df['logit'].max()
+        print(f"Layer {layer}: top candidate token = '{top_token}' (logit={top_logit:.3f})")
+
+    print("✅ All logit lens sanity checks passed for candidate tokens.")
+
 

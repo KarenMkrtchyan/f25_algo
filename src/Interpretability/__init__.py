@@ -26,7 +26,11 @@ from .Functions import (
     attach_head_ablation_hooks,
     attention_pattern,
     concatenated_attention_patterns,
-    concatenated_ablation_patterns
+    concatenated_ablation_patterns,
+    logit_lens_df,
+    track_tokens_df,
+    plot_token_logits,
+    test_logit_lens
 )
 
 # Version information
