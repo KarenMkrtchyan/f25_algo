@@ -65,6 +65,7 @@ plt.xlabel('Digits')
 plt.ylabel('Accuracy %')
 plt.ylim(0, 100)
 plt.grid(True, alpha=0.3)
+plt.axhline(y=50, color='gray', linestyle='--', linewidth=1.5, label='Random Baseline')
 plt.legend(title='Model')
 
 plt.savefig('Results/accuracy/accuracy_plot.png')
