@@ -1,10 +1,10 @@
 
-task: mixed_4_digit
+task: greater_than_12_digit
 dataset_path: parquet
 dataset_name: null
 dataset_kwargs:
   data_files:
-    - "/home/julian/f25_algo/output/mixed_4_digit-00000.parquet"
+    - "/home/julian/f25_algo/output/data-12-digit-00000.parquet"
 validation_split: train
 output_type: multiple_choice
 doc_to_text: "Is {{a}} > {{b}}? Answer:"

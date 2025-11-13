@@ -5,6 +5,9 @@ import pandas as pd
 import torch
 import os
 from dotenv import load_dotenv
+import sys
+from pathlib import Path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from lm_eval import evaluator, tasks
 from tl_eval.lm_evaluator import *
 
@@ -70,7 +73,7 @@ def run_benchmark(models, task_name, num_fewshot=0, limit=1000, output_dir="data
             })
 
     df = pd.DataFrame(results)
-    file_name = f"{output_dir}/qwen2.5-3B/accuracy_eval_qwen2.5-3b_ABLATED_{task_name}_{num_fewshot}shot_RUN{run}.csv"
+    file_name = f"{output_dir}/qwen2.5-7b/accuracy_eval_qwen2.5-7b{task_name}_{num_fewshot}shot_RUN{run}.csv"
     os.makedirs(os.path.dirname(file_name), exist_ok=True)
     df.to_csv(file_name, index=False)
 
