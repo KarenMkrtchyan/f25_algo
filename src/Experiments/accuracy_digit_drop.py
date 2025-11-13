@@ -66,7 +66,8 @@ plt.ylabel('Accuracy %')
 plt.ylim(0, 100)
 plt.grid(True, alpha=0.3)
 plt.legend(title='Model')
-plt.show()
 
 plt.savefig('Results/accuracy/accuracy_plot.png')
+plt.show()
+
 # %%
