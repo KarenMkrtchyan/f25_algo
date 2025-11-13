@@ -5,6 +5,9 @@ import pandas as pd
 import torch
 import os
 from dotenv import load_dotenv
+import sys
+from pathlib import Path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from lm_eval import evaluator, tasks
 from tl_eval.lm_evaluator import *
 
@@ -19,7 +22,10 @@ login(token=hf_api)
 def run_benchmark(models, task_name, num_fewshot=0, limit=1000, output_dir="dataruns/benchmarks", run=1):
     import os
     torch.cuda.empty_cache()
-    tm = tasks.TaskManager(include_path="./tasks")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    tasks_dir = os.path.join(current_dir, "../test_suite/tasks")
+    tm = tasks.TaskManager(include_path=tasks_dir)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     results = []
@@ -67,9 +73,11 @@ def run_benchmark(models, task_name, num_fewshot=0, limit=1000, output_dir="data
             })
 
     df = pd.DataFrame(results)
-    file_name = f"{output_dir}/qwen2.5-3B/accuracy_eval_qwen2.5-3b_ABLATED_{task_name}_{num_fewshot}shot_RUN{run}.csv"
+    file_name = f"{output_dir}/{models}/accuracy_eval_{models}_{task_name}_{num_fewshot}shot_RUN{run}.csv"
     os.makedirs(os.path.dirname(file_name), exist_ok=True)
     df.to_csv(file_name, index=False)
 
     print(f"Results saved in {file_name}")
     return df
+
+# %%
