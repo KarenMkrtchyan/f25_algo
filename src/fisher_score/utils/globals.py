@@ -1,3 +1,5 @@
+from typing import Literal
+
 # -1 means start layer is TBD and is skipped in the pipeline
 modelslist = [
     {
@@ -16,3 +18,5 @@ modelslist = [
         'end_layer': 20
     }
 ]
+
+DigitPosition = Literal["hundreds", "tens", "units"]
