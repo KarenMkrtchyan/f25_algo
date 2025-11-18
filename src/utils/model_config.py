@@ -38,6 +38,7 @@ COMMON_MODELS = {
     "llama-70b": "meta-llama/Llama-2-70b-hf",
     "llama-3-8b": "meta-llama/Meta-Llama-3-8B",
     "llama-3-70b": "meta-llama/Meta-Llama-3-70B",
+    "llama3.2-3b": "meta-llama/Llama-3.2-3B",
 
     # Gemma Family (Google)
     "gemma-2b": "google/gemma-2b",

@@ -1,3 +1,15 @@
+from .Logit_Setup import initialize_environment
+
+# Automatically run environment setup when utils is imported
+DEVICE = initialize_environment()
+
+import torch as t
+import plotly.express as px
+import einops
+from circuitsvis.attention import attention_heads
+from fancy_einsum import einsum
+
+
 from .Setup import (
     device,
     HookedTransformer,
