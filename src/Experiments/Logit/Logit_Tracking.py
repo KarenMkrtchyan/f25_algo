@@ -4,8 +4,7 @@ import pandas as pd
 import torch as t
 from torch.nn import functional as F
 import transformer_lens.utils as Utils
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-import transformer_lens.HookedTransformer as HookedTransformer
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from utils.model_config import load_model
 from Interpretability import logit_lens_df, track_tokens_df, plot_token_logits, test_logit_lens

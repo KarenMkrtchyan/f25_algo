@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import re
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import pyarrow.parquet as pq
@@ -928,5 +929,48 @@ def test_logit_lens(df_tokens, candidates):
         print(f"Layer {layer}: top candidate token = '{top_token}' (logit={top_logit:.3f})")
 
     print("✅ All logit lens sanity checks passed for candidate tokens.")
+
+def make_prompt(a, b):
+    return f"Is {a} > {b}? Answer:"
+
+def build_dataset(n=2000, seed=42, low=1, high=100000):
+    rng = np.random.default_rng(seed)
+    data = []
+    for _ in range(n):
+        a = int(rng.integers(low, high))
+        b = int(rng.integers(low, high))
+        clean = make_prompt(a, b)
+        corrupt = make_prompt(b, a)
+        label = int(a > b)
+        data.append((clean, corrupt, a, b, label))
+    return data
+
+def get_last_pos(model, prompt):
+    toks = model.to_tokens(prompt)[0]
+    return len(toks) - 1 
+
+def logit_diff(logits, index_a, index_b):
+    return logits[0, -1, index_a] - logits[0, -1, index_b]
+
+def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos):
+    def hook_fn(corrupt_act, hook):
+        clean_act = clean_cache[hook_name]
+        if clean_act.ndim == 3:
+            new_act = corrupt_act.clone()
+            new_act[:, pos, :] = clean_act[:, pos, :]
+            return new_act
+        elif clean_act.ndim == 4:
+            new_act = corrupt_act.clone()
+            new_act[:, :, pos, :] = clean_act[:, :, pos, :]
+            return new_act
+        else:
+            raise ValueError("Unexpected activation shape")
+
+    logits = model.run_with_hooks(
+        corrupt_prompt,
+        return_type="logits",
+        fwd_hooks=[(hook_name, hook_fn)]
+    )
+    return logit_diff(logits)
 
 

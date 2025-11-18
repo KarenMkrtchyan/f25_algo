@@ -30,7 +30,9 @@ from .Functions import (
     logit_lens_df,
     track_tokens_df,
     plot_token_logits,
-    test_logit_lens
+    test_logit_lens,
+    build_dataset,
+    logit_diff
 )
 
 # Version information
