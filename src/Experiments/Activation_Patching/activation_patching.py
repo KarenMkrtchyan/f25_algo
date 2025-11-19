@@ -25,8 +25,8 @@ from transformer_lens.HookedTransformer import HookedTransformer
 
 
 model = HookedTransformer.from_pretrained("qwen2.5-3b")
-clean_prompt = "Is 93 > 84? Answer: "
-corrupted_prompt = "Is 84 > 93? Answer: "
+clean_prompt = "Is 9432 > 8231? Answer: "
+corrupted_prompt = "Is 8231 > 9432? Answer: "
 
 clean_tokens = model.to_tokens(clean_prompt)
 corrupted_tokens = model.to_tokens(corrupted_prompt)
@@ -89,13 +89,13 @@ fig.update_layout(
     width=200 * n_positions
 )
 
-fig.write_image(f'results/heatmap_by_position.png', width=200*n_positions, height=400)
+fig.write_image(f'results/heatmap_by_position4.png', width=200*n_positions, height=400)
 fig.show()
 
 #%%
 tokens = model.to_str_tokens(clean_tokens)
 
-with open(f'results/tokens.txt', 'w') as f:
+with open(f'results/tokens4.txt', 'w') as f:
     f.write(str(tokens) + "\n")
 
 # %%
