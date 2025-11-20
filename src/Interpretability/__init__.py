@@ -32,7 +32,16 @@ from .Functions import (
     plot_token_logits,
     test_logit_lens,
     build_dataset,
-    logit_diff
+    logit_diff,
+    patch_component,
+    serialize_cache,
+    dict_to_torch,
+    get_last_pos,
+    load_or_generate_parquet,
+    run_patching,
+    plot_attention_head_heatmap,
+    plot_mlp_patch_bar,
+    plot_resid_patch_bar
 )
 
 # Version information

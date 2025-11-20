@@ -6,8 +6,11 @@ import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import pyarrow as pa
 import pyarrow.parquet as pq
+from tqdm import tqdm
 import yaml
+import json
 import torch as t
 from utils import Setup
 from utils.model_config import load_model
@@ -973,4 +976,149 @@ def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos):
     )
     return logit_diff(logits)
 
+def serialize_cache(cache):
+    out = {}
+    for name, tensor in cache.items():
+        if isinstance(tensor, torch.Tensor):
+            out[name] = tensor.cpu().tolist()
+        else:
+            out[name] = tensor
+    return json.dumps(out)
 
+def dict_to_torch(cache_dict):
+    return {k: t.tensor(v) for k, v in cache_dict.items()}
+
+def load_or_generate_parquet(model, dataset, output_path, Yes_index, No_index):
+    if not os.path.exists(output_path):
+        print(f"Parquet file not found. Generating caches at {output_path} ...")
+        
+        schema = pa.schema({
+            "clean_caches": pa.string(),
+            "corrupt_caches": pa.string(),
+            "logit_diffs": pa.float32()
+        })
+        writer = pq.ParquetWriter(output_path, schema)
+
+        for clean, corrupt, a, b, label in tqdm(dataset):
+            clean_logits, clean_cache = model.run_with_cache(clean, remove_batch_dim=False)
+            corrupt_logits, corrupt_cache = model.run_with_cache(corrupt, remove_batch_dim=False)
+
+            row = {
+                "clean_caches": json.dumps({k: v.cpu().tolist() for k, v in clean_cache.items()}),
+                "corrupt_caches": json.dumps({k: v.cpu().tolist() for k, v in corrupt_cache.items()}),
+                "logit_diffs": float(logit_diff(corrupt_logits, Yes_index, No_index))
+            }
+
+            row = {k: [v] for k, v in row.items()}
+
+            table = pa.Table.from_pydict(row, schema=schema)
+            writer.write_table(table)
+
+        writer.close()
+        print(f"Parquet file generated at {output_path}")
+
+    else:
+        print(f"Parquet file already exists at {output_path}. Loading caches...")
+
+    df = pd.read_parquet(output_path)
+
+    df["clean_caches"] = df["clean_caches"].apply(json.loads).apply(dict_to_torch)
+    df["corrupt_caches"] = df["corrupt_caches"].apply(json.loads).apply(dict_to_torch)
+
+    return df
+
+def iter_parquet_rows(path):
+    pf = pq.ParquetFile(path)
+    for batch in pf.iter_batches():
+        df = batch.to_pandas()
+        for _, row in df.iterrows():
+            yield {
+                "clean": dict_to_torch(json.loads(row["clean_caches"])),
+                "corrupt": dict_to_torch(json.loads(row["corrupt_caches"])),
+                "ld": row["logit_diffs"]
+            }
+
+def run_patching(df, dataset, model, components=None):
+    num_layers = model.cfg.n_layers
+
+    components = {
+        "attn_heads": lambda L: f"blocks.{L}.attn.hook_result",
+        "mlp": lambda L: f"blocks.{L}.mlp.hook_post",
+        "resid_post": lambda L: f"blocks.{L}.hook_resid_post"
+    }
+
+    patch_effects = {}
+    for name in components:
+        if name == "attn_heads":
+            patch_effects[name] = t.zeros(num_layers, model.cfg.n_heads)
+        else:
+            patch_effects[name] = t.zeros(num_layers)
+
+    for i, (clean, corrupt, a, b, label) in enumerate(tqdm(dataset, total=len(df))):
+        pos = get_last_pos(model, corrupt)
+        clean_cache = df.loc[i, "clean_caches"]
+        corrupt_cache = df.loc[i, "corrupt_caches"]
+        base_ld = df.loc[i, "logit_diffs"]
+
+        for name, hook_fn in components.items():
+            for L in range(num_layers):
+                hook_name = hook_fn(L)
+                patched_ld = patch_component(model, corrupt, clean_cache, hook_name, pos)
+                patch_effects[name][L] += patched_ld - base_ld
+
+    for name in patch_effects:
+        patch_effects[name] /= len(df)
+
+    return patch_effects
+
+def plot_attention_head_heatmap(patch_effects, model, output_path="./figures"):
+    if output_path == None:
+        print("Provide valid output_path")
+        return None
+
+    attn = patch_effects["attn_heads"].cpu().numpy()
+
+    plt.figure(figsize=(12, 6))
+    plt.imshow(attn, cmap="coolwarm", aspect="auto")
+    plt.colorbar(label="Δ logit diff (patched - corrupted)")
+    plt.xlabel("Head")
+    plt.ylabel("Layer")
+    plt.title("Attention Head Patch Effects")
+
+    save_path = os.path.join(output_path, "attn_head_patch_heatmap.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+def plot_mlp_patch_bar(patch_effects, model, output_path):
+    if output_path == None:
+        print("Provide valid output_path")
+        return None
+
+    mlp = patch_effects["mlp"].cpu().numpy()
+
+    plt.figure(figsize=(10, 4))
+    plt.bar(range(len(mlp)), mlp)
+    plt.title("MLP Patch Effects per Layer")
+    plt.xlabel("Layer")
+    plt.ylabel("Δ logit diff")
+
+    save_path = os.path.join(output_path, "mlp_patch_effects.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+def plot_resid_patch_bar(patch_effects, model, output_path="./figures"):
+    if output_path == None:
+        print("Provide valid output_path")
+        return None
+
+    resid = patch_effects["resid_post"].cpu().numpy()
+
+    plt.figure(figsize=(10, 4))
+    plt.bar(range(len(resid)), resid)
+    plt.title("Residual Stream Patch Effects")
+    plt.xlabel("Layer")
+    plt.ylabel("Δ logit diff")
+
+    save_path = os.path.join(output_path, "resid_patch_effects.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
