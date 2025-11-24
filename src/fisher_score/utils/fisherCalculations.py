@@ -1,9 +1,10 @@
 import torch
 from transformer_lens import HookedTransformer
 from tqdm import tqdm
-from typing import Dict, List, DefaultDict, Union
+from typing import Dict, List, DefaultDict, Literal, Union
 import numpy as np
-from src.fisher_score.utils.globals import DigitPosition
+
+DigitPosition = Literal["hundreds", "tens", "units"]
 
 class FisherCalculations:
     """
@@ -90,7 +91,7 @@ class FisherCalculations:
                 torch.cuda.empty_cache()
 
             # Combine results for this class
-            all_acts = torch.cat(all_acts, dim=0)  # [num_examples, n_layers, n_neurons]
+            all_acts = torch.cat(all_acts, dim=0)  # [num_examples, n_neurons]
             mean_vec = all_acts.mean(dim=0)
             var_vec = all_acts.var(dim=0, unbiased=False)
 

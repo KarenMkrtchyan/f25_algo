@@ -3,9 +3,14 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import re
+import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import pyarrow as pa
 import pyarrow.parquet as pq
+from tqdm import tqdm
 import yaml
+import json
 import torch as t
 from utils import Setup
 from utils.model_config import load_model
@@ -793,3 +798,327 @@ def attention_pattern_toward_each_token(model, text):
     df = pd.DataFrame(all_stats)
     return df
 
+def logit_lens_df(model, text, k=5):
+    """
+    Runs a logit lens analysis on a TransformerLens HookedTransformer model
+    and returns a DataFrame showing the top-k predicted tokens per layer.
+    """
+    tokens = model.to_tokens(text)
+    _, cache = model.run_with_cache(tokens)
+
+    records = []
+
+    for layer_idx in range(model.cfg.n_layers):
+        resid = cache["resid_post", layer_idx][0, -1, :]
+        pseudo_logits = resid @ model.W_U + model.b_U
+        top_vals, top_ids = t.topk(pseudo_logits, k=k)
+
+        for rank, (val, idx) in enumerate(zip(top_vals, top_ids), start=1):
+            token_str = repr(model.to_string(idx.unsqueeze(0))).strip("'")
+            records.append({
+                "layer": layer_idx,
+                "rank": rank,
+                "token": token_str,
+                "logit": val.item()
+            })
+
+    return pd.DataFrame(records)
+
+def track_tokens_df(model, text, target_tokens, token_position=-1):
+    """
+    Tracks the pseudo-logits of multiple candidate tokens across all layers 
+    and returns a DataFrame for later analysis/plotting.
+
+    Args:
+        model: HookedTransformer (TransformerLens)
+        text: Input prompt
+        target_tokens: list of candidate strings
+        token_position: int, token index to track (-1 = last token)
+
+    Returns:
+        pd.DataFrame with columns [layer, token, logit]
+    """
+    tokens = model.to_tokens(text)
+    _, cache = model.run_with_cache(tokens)
+    token_ids_dict = {t: model.to_tokens(t)[0] for t in target_tokens}
+
+    records = []
+    
+    for layer_idx in range(model.cfg.n_layers):
+        resid = cache["resid_post", layer_idx][0, token_position, :]
+        pseudo_logits = resid @ model.W_U + model.b_U
+
+        for token_str, ids in token_ids_dict.items():
+            logit_val = pseudo_logits[ids].sum().item() if len(ids) > 1 else pseudo_logits[ids[0]].item()
+            records.append({
+                "layer": layer_idx,
+                "token": token_str,
+                "logit": logit_val
+            })
+
+    df_tokens = pd.DataFrame(records)
+    return df_tokens
+
+def plot_token_logits(df_tokens, path=""):
+    """
+    Plots candidate token pseudo-logits across layers.
+
+    Args:
+        df_tokens: DataFrame from track_tokens_df with columns [layer, token, logit]
+        path: str, if provided saves the plot to this path
+    """
+    import matplotlib.pyplot as plt
+
+    candidates = df_tokens['token'].unique()
+    plt.figure(figsize=(10,5))
+
+    # Plot each candidate
+    for token in candidates:
+        token_df = df_tokens[df_tokens['token'] == token]
+        plt.plot(token_df['layer'], token_df['logit'], marker='o', label=token)
+
+    # Top token per layer
+    top_tokens_per_layer = df_tokens.loc[df_tokens.groupby('layer')['logit'].idxmax()]
+    for _, row in top_tokens_per_layer.iterrows():
+        plt.scatter(row['layer'], row['logit'], s=100, edgecolor='k', facecolor='none', linewidth=1.5)
+
+    # Final layer top token (safe idxmax within layer subset)
+    final_layer = df_tokens['layer'].max()
+    layer_subset = df_tokens[df_tokens['layer'] == final_layer]
+    final_top_token_row = layer_subset.loc[layer_subset['logit'].idxmax()]
+    plt.scatter(final_top_token_row['layer'], final_top_token_row['logit'],
+                s=150, color='red', marker='*', label='Final Top Token')
+
+    plt.xlabel("Layer")
+    plt.ylabel("Pseudo-logit")
+    plt.title("Logit Lens: Candidate Tokens Across Layers")
+    plt.legend()
+    plt.grid(True)
+
+    if path:
+        plt.savefig(path, bbox_inches='tight')
+        print(f"Plot saved to {path}")
+    plt.close()
+
+def test_logit_lens(df_tokens, candidates):
+    """
+    Sanity checks for logit lens outputs restricted to candidate tokens.
+
+    Args:
+        df_tokens: DataFrame from track_tokens_df with columns [layer, token, logit]
+        candidates: list of target tokens
+    """
+    n_layers = df_tokens['layer'].nunique()
+    n_tokens = len(candidates)
+
+    # 1️⃣ Check DataFrame shape
+    expected_rows = n_layers * n_tokens
+    assert df_tokens.shape[0] == expected_rows, f"Expected {expected_rows} rows, got {df_tokens.shape[0]}"
+
+    # 2️⃣ Check all candidate tokens are present
+    df_tokens_set = set(df_tokens['token'].unique())
+    assert df_tokens_set == set(candidates), f"Tokens mismatch. Found: {df_tokens_set}"
+
+    # 3️⃣ Check pseudo-logits vary across layers (not all identical)
+    for token in candidates:
+        token_logits = df_tokens[df_tokens['token']==token]['logit'].values
+        assert len(set(token_logits)) > 1, f"Pseudo-logits do not vary for token '{token}'"
+
+    # 4️⃣ Check top token per layer within candidate subset
+    for layer in range(n_layers):
+        layer_df = df_tokens[df_tokens['layer']==layer]
+        top_token = layer_df.sort_values('logit', ascending=False).iloc[0]['token']
+        top_logit = layer_df['logit'].max()
+        print(f"Layer {layer}: top candidate token = '{top_token}' (logit={top_logit:.3f})")
+
+    print("✅ All logit lens sanity checks passed for candidate tokens.")
+
+def make_prompt(a, b):
+    return f"Is {a} > {b}? Answer:"
+
+def build_dataset(n=2000, seed=42, low=1, high=100000):
+    rng = np.random.default_rng(seed)
+    data = []
+    for _ in range(n):
+        a = int(rng.integers(low, high))
+        b = int(rng.integers(low, high))
+        clean = make_prompt(a, b)
+        corrupt = make_prompt(b, a)
+        label = int(a > b)
+        data.append((clean, corrupt, a, b, label))
+    return data
+
+def get_last_pos(model, prompt):
+    toks = model.to_tokens(prompt)[0]
+    return len(toks) - 1 
+
+def logit_diff(logits, index_a, index_b):
+    return logits[0, -1, index_a] - logits[0, -1, index_b]
+
+def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos):
+    def hook_fn(corrupt_act, hook):
+        clean_act = clean_cache[hook_name]
+        if clean_act.ndim == 3:
+            new_act = corrupt_act.clone()
+            new_act[:, pos, :] = clean_act[:, pos, :]
+            return new_act
+        elif clean_act.ndim == 4:
+            new_act = corrupt_act.clone()
+            new_act[:, :, pos, :] = clean_act[:, :, pos, :]
+            return new_act
+        else:
+            raise ValueError("Unexpected activation shape")
+
+    logits = model.run_with_hooks(
+        corrupt_prompt,
+        return_type="logits",
+        fwd_hooks=[(hook_name, hook_fn)]
+    )
+    return logit_diff(logits)
+
+def serialize_cache(cache):
+    out = {}
+    for name, tensor in cache.items():
+        if isinstance(tensor, torch.Tensor):
+            out[name] = tensor.cpu().tolist()
+        else:
+            out[name] = tensor
+    return json.dumps(out)
+
+def dict_to_torch(cache_dict):
+    return {k: t.tensor(v) for k, v in cache_dict.items()}
+
+def load_or_generate_parquet(model, dataset, output_path, Yes_index, No_index):
+    if not os.path.exists(output_path):
+        print(f"Parquet file not found. Generating caches at {output_path} ...")
+        
+        schema = pa.schema({
+            "clean_caches": pa.string(),
+            "corrupt_caches": pa.string(),
+            "logit_diffs": pa.float32()
+        })
+        writer = pq.ParquetWriter(output_path, schema)
+
+        for clean, corrupt, a, b, label in tqdm(dataset):
+            clean_logits, clean_cache = model.run_with_cache(clean, remove_batch_dim=False)
+            corrupt_logits, corrupt_cache = model.run_with_cache(corrupt, remove_batch_dim=False)
+
+            row = {
+                "clean_caches": json.dumps({k: v.cpu().tolist() for k, v in clean_cache.items()}),
+                "corrupt_caches": json.dumps({k: v.cpu().tolist() for k, v in corrupt_cache.items()}),
+                "logit_diffs": float(logit_diff(corrupt_logits, Yes_index, No_index))
+            }
+
+            row = {k: [v] for k, v in row.items()}
+
+            table = pa.Table.from_pydict(row, schema=schema)
+            writer.write_table(table)
+
+        writer.close()
+        print(f"Parquet file generated at {output_path}")
+
+    else:
+        print(f"Parquet file already exists at {output_path}. Loading caches...")
+
+    df = pd.read_parquet(output_path)
+
+    df["clean_caches"] = df["clean_caches"].apply(json.loads).apply(dict_to_torch)
+    df["corrupt_caches"] = df["corrupt_caches"].apply(json.loads).apply(dict_to_torch)
+
+    return df
+
+def iter_parquet_rows(path):
+    pf = pq.ParquetFile(path)
+    for batch in pf.iter_batches():
+        df = batch.to_pandas()
+        for _, row in df.iterrows():
+            yield {
+                "clean": dict_to_torch(json.loads(row["clean_caches"])),
+                "corrupt": dict_to_torch(json.loads(row["corrupt_caches"])),
+                "ld": row["logit_diffs"]
+            }
+
+def run_patching(df, dataset, model, components=None):
+    num_layers = model.cfg.n_layers
+
+    components = {
+        "attn_heads": lambda L: f"blocks.{L}.attn.hook_result",
+        "mlp": lambda L: f"blocks.{L}.mlp.hook_post",
+        "resid_post": lambda L: f"blocks.{L}.hook_resid_post"
+    }
+
+    patch_effects = {}
+    for name in components:
+        if name == "attn_heads":
+            patch_effects[name] = t.zeros(num_layers, model.cfg.n_heads)
+        else:
+            patch_effects[name] = t.zeros(num_layers)
+
+    for i, (clean, corrupt, a, b, label) in enumerate(tqdm(dataset, total=len(df))):
+        pos = get_last_pos(model, corrupt)
+        clean_cache = df.loc[i, "clean_caches"]
+        corrupt_cache = df.loc[i, "corrupt_caches"]
+        base_ld = df.loc[i, "logit_diffs"]
+
+        for name, hook_fn in components.items():
+            for L in range(num_layers):
+                hook_name = hook_fn(L)
+                patched_ld = patch_component(model, corrupt, clean_cache, hook_name, pos)
+                patch_effects[name][L] += patched_ld - base_ld
+
+    for name in patch_effects:
+        patch_effects[name] /= len(df)
+
+    return patch_effects
+
+def plot_attention_head_heatmap(patch_effects, model, output_path="./figures"):
+    if output_path == None:
+        print("Provide valid output_path")
+        return None
+
+    attn = patch_effects["attn_heads"].cpu().numpy()
+
+    plt.figure(figsize=(12, 6))
+    plt.imshow(attn, cmap="coolwarm", aspect="auto")
+    plt.colorbar(label="Δ logit diff (patched - corrupted)")
+    plt.xlabel("Head")
+    plt.ylabel("Layer")
+    plt.title("Attention Head Patch Effects")
+
+    save_path = os.path.join(output_path, "attn_head_patch_heatmap.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+def plot_mlp_patch_bar(patch_effects, model, output_path):
+    if output_path == None:
+        print("Provide valid output_path")
+        return None
+
+    mlp = patch_effects["mlp"].cpu().numpy()
+
+    plt.figure(figsize=(10, 4))
+    plt.bar(range(len(mlp)), mlp)
+    plt.title("MLP Patch Effects per Layer")
+    plt.xlabel("Layer")
+    plt.ylabel("Δ logit diff")
+
+    save_path = os.path.join(output_path, "mlp_patch_effects.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+def plot_resid_patch_bar(patch_effects, model, output_path="./figures"):
+    if output_path == None:
+        print("Provide valid output_path")
+        return None
+
+    resid = patch_effects["resid_post"].cpu().numpy()
+
+    plt.figure(figsize=(10, 4))
+    plt.bar(range(len(resid)), resid)
+    plt.title("Residual Stream Patch Effects")
+    plt.xlabel("Layer")
+    plt.ylabel("Δ logit diff")
+
+    save_path = os.path.join(output_path, "resid_patch_effects.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()

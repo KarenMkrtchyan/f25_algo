@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from transformer_lens import HookedTransformer
 from src.fisher_score.utils.fisherCalculations import FisherCalculations
 from src.fisher_score.utils.fisherDataGen import FisherDataGenerator
-from src.fisher_score.utils.globals import modelslist
+from src.fisher_score.utils.modelList import modelslist
 
 
 drive_path = '/content/drive/My Drive/algo/fisher_scores/'
@@ -30,7 +30,7 @@ for cfg in modelslist:
     model_fisher = FisherCalculations(model=model, data=groups, device=device, start_layer=cfg['start_layer'], end_layer=cfg['end_layer'])
     for digit in ["hundreds", "tens", "units"]:
 
-        model_fisher.calc_in_class_stats(digit_position=digit) # type: ignore
+        model_fisher.calc_in_class_stats(digit_position=digit)
         model_fisher.calc_global_mean()
         model_fisher.calc_between_class_var()
         fisher_scores = model_fisher.calc_fisher()
