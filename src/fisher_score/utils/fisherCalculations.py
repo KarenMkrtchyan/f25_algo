@@ -6,6 +6,7 @@ import numpy as np
 
 DigitPosition = Literal["hundreds", "tens", "units"]
 
+# For 3 digits 
 class FisherCalculations:
     """
     Compute Fisher scores for neuron activations in a HookedTransformer model.
@@ -34,7 +35,7 @@ class FisherCalculations:
     ) -> None:
         if model.tokenizer is None:
             raise ValueError("Model must have a valid tokenizer. Please ensure the model was loaded correctly.")
-    
+
         self.model = model
         self.data = data
         self.device = device
@@ -54,7 +55,7 @@ class FisherCalculations:
         Compute class-wise mean and variance of neuron activations for a given digit position.
         Saves results in self.class_stats.
         """
-        self.class_stats = {}  # reset per run 
+        self.class_stats = {}  # reset per run
 
         for pair_class, examples in tqdm(self.data[digit_position].items(), desc=f"Processing {digit_position} groups"):
             n = len(examples)
@@ -95,6 +96,7 @@ class FisherCalculations:
             mean_vec = all_acts.mean(dim=0)
             var_vec = all_acts.var(dim=0, unbiased=False)
 
+
             self.class_stats[pair_class] = {
                 "mean": mean_vec,
                 "var": var_vec,
@@ -114,13 +116,14 @@ class FisherCalculations:
         first_mean = next(iter(self.class_stats.values()))["mean"]
         n_layers, n_neurons = first_mean.shape # type: ignore
 
-        weighted_sum = torch.zeros(n_neurons)
+        weighted_sum = torch.zeros((n_layers, n_neurons))
         total_samples = 0
 
         for _, stats in self.class_stats.items():
-            n = stats["n"] 
-            weighted_sum += stats["mean"] * n 
+            n = stats["n"]
+            weighted_sum += stats["mean"] * n
             total_samples += n
+
 
         self.global_mean = weighted_sum / total_samples
 
