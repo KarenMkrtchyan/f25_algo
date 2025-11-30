@@ -38,6 +38,7 @@ from .Functions import (
     dict_to_torch,
     get_last_pos,
     load_or_generate_parquet,
+    head_mean_ablation_hook_by_pos,
     run_patching,
     plot_attention_head_heatmap,
     plot_mlp_patch_bar,
@@ -65,5 +66,6 @@ __all__ = [
     "get_ablation_scores",
     "visualize_ablation",
     "run_model_with_induction_analysis",
-    "run_model_with_ablation_analysis"
+    "run_model_with_ablation_analysis",
+    "head_mean_ablation_hook_by_pos"
 ]
