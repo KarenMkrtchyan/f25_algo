@@ -4,14 +4,14 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from test_suite.eval import run_benchmark
 
 model_names = [
-    "Qwen/Qwen2.5-7B", 
+    #"Qwen/Qwen2.5-7B", 
     "Qwen/Qwen2.5-3B", 
-    "google/gemma-2-2b", 
-    "meta-llama/Llama-3.2-3B",
+    #"google/gemma-2-2b", 
+    #"meta-llama/Llama-3.2-3B",
     ]
 
 tasks=[
@@ -37,22 +37,20 @@ accuracy_df = pd.DataFrame(columns=['model_name', 'accuracy', 'digits'])
 
 for model in model_names:
 
-    digit_counter=3
+    digit_counter = 3
     for task in tasks:
 
         df = run_benchmark(
-            models=[model],
+            model=model,
             task_name=task,
-            num_fewshot=5,
+            num_fewshot=0,
             limit=1000,
-            output_dir= "../test_suite/dataruns/benchmarks/by_digit",
             run=1
         )
-        new_row = {'model_name': model, 'accuracy' : [df.iloc[0]['overall_accuracy']], 'digits': [digit_counter]}
-        accuracy_df = pd.concat([accuracy_df, pd.DataFrame(new_row)])
+        #new_row = {'model_name': model, 'accuracy' : [df.iloc[0]['overall_accuracy']], 'digits': [digit_counter]}
+        #accuracy_df = pd.concat([accuracy_df, pd.DataFrame(new_row)])
         digit_counter += 1
 
-accuracy_df.to_csv('Results/accuracy/accuracy_scores.csv')
 
 # %%
 # Plot accuracy scores

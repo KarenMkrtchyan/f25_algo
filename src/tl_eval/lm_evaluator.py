@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from transformer_lens import HookedTransformer
 from transformers import AutoConfig
+from pathlib import Path
 
 from lm_eval import evaluator
 from lm_eval import tasks
@@ -44,7 +45,10 @@ def evaluate_lm_eval(lens_model: HookedTransformer, task_names: list[str], **kwa
             self.model.train(mode)
             return self
 
-    tm = tasks.TaskManager(include_path=".")
+
+    current_dir = Path(__file__).resolve().parent
+    tasks_dir = current_dir.parent / "test_suite" / "tasks"
+    tm = tasks.TaskManager(include_path=str(tasks_dir))
 
     model = HFLikeModelAdapter(lens_model)
     warnings.filterwarnings("ignore", message="Failed to get model SHA for")
@@ -55,7 +59,8 @@ def evaluate_lm_eval(lens_model: HookedTransformer, task_names: list[str], **kwa
         verbosity="WARNING",
         **kwargs,
     )
-    accuracy = results["results"]["greater_than"]["acc,none"] * 100
+    task = task_names[0]
+    accuracy = results["results"][task]["acc,none"] * 100
     print(accuracy)
     return results
 # %%
