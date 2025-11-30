@@ -979,7 +979,7 @@ def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos):
 def serialize_cache(cache):
     out = {}
     for name, tensor in cache.items():
-        if isinstance(tensor, torch.Tensor):
+        if isinstance(tensor, t.Tensor):
             out[name] = tensor.cpu().tolist()
         else:
             out[name] = tensor
