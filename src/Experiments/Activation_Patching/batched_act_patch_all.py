@@ -1,9 +1,11 @@
 #%%
 import sys
 import os
-from data.prompts import prompts as prompt_list
+import pandas as pd
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from Interpretability.path_patching import path_patch, Node, IterNode, imshow, hist
+import plotly.express as px
+from data.prompts import batched_prompts as prompt_list
+from Interpretability.path_patching import act_patch, Node, IterNode, imshow, hist
 from transformer_lens.HookedTransformer import HookedTransformer
 import torch as t
 from torch import Tensor
@@ -13,7 +15,6 @@ from jaxtyping import Float, Int, Bool
 # %%
 device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
-
 
 model = HookedTransformer.from_pretrained(
     "qwen2.5-3b",
@@ -100,68 +101,52 @@ def greater_than_metric_noising(
 
 labels =[f"{tok} {i}" for i, tok in enumerate(model.to_str_tokens(clean_tokens[0]))]
 
-
-#%%
-
-# Patching from attention head -> final residual stream value
-
-results = path_patch(
-    model,
-    orig_input=clean_tokens,
-    new_input=flipped_tokens,
-    sender_nodes= IterNode('z'),
-    receiver_nodes=Node("resid_post", 35),
-    patching_metric=greater_than_metric_noising,
-    verbose=True,
-)
-
-results
-
 # %%
 
-imshow(
-    results['z'],
-    title="Direct effect on logit diff (patch from head output -> final resid)",
-    labels={"x": "Head", "y": "Layer", "color": "Logit diff variation"},
-    border=True,
-    width=600,
-    margin={"r": 100, "l": 100},
-    zmin=0.80, zmax=1.00
-)
-#%%
-
-# Patching from residual stream-> final residual stream value (for each sequence position)
-
-results = path_patch(
-    model,
+results = act_patch(
+    model=model,
     orig_input=flipped_tokens,
-    new_input=clean_tokens,
-    sender_nodes=IterNode(["resid_pre", "attn_out", "mlp_out"], seq_pos="each"),
-    receiver_nodes=Node("resid_post", 35),
+    new_cache=clean_cache,
+    patching_nodes=IterNode(["resid_pre", "attn_out", "mlp_out"], seq_pos="each"),
     patching_metric=greater_than_metric_noising,
-    direct_includes_mlps=False, # gives similar results to direct_includes_mlps=True
     verbose=True,
 )
 
 #%%
-
-# We get a dictionary where each key is a node name, and each value is a tensor of (layer, seq_pos)
-assert list(results.keys()) == ['resid_pre', 'attn_out', 'mlp_out']
-
-results_stacked = t.stack([
-    results.T for results in results.values()
-])
+assert results.keys() == {"resid_pre", "attn_out", "mlp_out"}
 
 imshow(
-    results_stacked,
+    t.stack([r.T for r in results.values()]) * 100,
     facet_col=0,
-    facet_labels=['resid_pre', 'attn_out', 'mlp_out'],
-    title="Results of denoising patching at residual stream",
+    facet_labels=["Residual Stream", "Attn Output", "MLP Output"],
     labels={"x": "Sequence position", "y": "Layer", "color": "Logit diff variation"},
     x=labels,
     xaxis_tickangle=45,
-    width=1300,
-    margin={"r": 100, "l": 100},
+    coloraxis=dict(colorbar_ticksuffix = "%"),
     border=True,
+    width=1300,
+    margin={"r": 100, "l": 100}
 )
+# %%
+
+results = act_patch(
+    model=model,
+    orig_input=flipped_tokens,
+    new_cache=clean_cache,
+    patching_nodes=IterNode(["z"]),
+    patching_metric=greater_than_metric_noising,
+    verbose=True,
+)
+#%% 
+
+imshow(
+    results['z'] * 100,
+    title="Attn head output",
+    labels={"x": "Head", "y": "Layer", "color": "Logit diff variation"},
+    coloraxis=dict(colorbar_ticksuffix = "%"),
+    border=True,
+    width=600,
+    margin={"r": 100, "l": 100}
+)
+
 # %%
