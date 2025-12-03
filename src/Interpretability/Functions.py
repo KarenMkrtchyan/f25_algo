@@ -9,10 +9,15 @@ import matplotlib.pyplot as plt
 import pyarrow as pa
 import pyarrow.parquet as pq
 from tqdm import tqdm
+from neel_plotly import imshow, line, scatter
+import plotly.subplots as sp
+import plotly.graph_objects as go
 import yaml
 import json
 import torch as t
+import transformer_lens.patching as patching
 from utils import Setup
+from functools import partial
 from utils.model_config import load_model
 from utils.Setup import Float, Int, Tensor, HookPoint, t, einops, cv, display, HookedTransformer, Callable, functools, tqdm, utils
 
@@ -270,7 +275,7 @@ def visualize_ablation(
             z=ablation_scores.cpu().numpy(),
             x=list(range(model.cfg.n_heads)),
             y=list(range(model.cfg.n_layers)),
-            colorscale='RdBu',
+            color_continuous_scale="RdBu",
             colorbar=dict(title="Loss Difference")
         ))
         
@@ -955,16 +960,16 @@ def get_last_pos(model, prompt):
 def logit_diff(logits, index_a, index_b):
     return logits[0, -1, index_a] - logits[0, -1, index_b]
 
-def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos):
+def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos, Yes_index, No_index):
     def hook_fn(corrupt_act, hook):
         clean_act = clean_cache[hook_name]
         if clean_act.ndim == 3:
             new_act = corrupt_act.clone()
-            new_act[:, pos, :] = clean_act[:, pos, :]
+            new_act[:, pos, :] = clean_act[:, pos, :].to(corrupt_act.device)
             return new_act
         elif clean_act.ndim == 4:
             new_act = corrupt_act.clone()
-            new_act[:, :, pos, :] = clean_act[:, :, pos, :]
+            new_act[:, :, pos, :] = clean_act[:, :, pos, :].to(corrupt_act.device)
             return new_act
         else:
             raise ValueError("Unexpected activation shape")
@@ -974,12 +979,12 @@ def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos):
         return_type="logits",
         fwd_hooks=[(hook_name, hook_fn)]
     )
-    return logit_diff(logits)
+    return logit_diff(logits, Yes_index, No_index)
 
 def serialize_cache(cache):
     out = {}
     for name, tensor in cache.items():
-        if isinstance(tensor, torch.Tensor):
+        if isinstance(tensor, t.Tensor):
             out[name] = tensor.cpu().tolist()
         else:
             out[name] = tensor
@@ -1010,115 +1015,347 @@ def load_or_generate_parquet(model, dataset, output_path, Yes_index, No_index):
             }
 
             row = {k: [v] for k, v in row.items()}
-
             table = pa.Table.from_pydict(row, schema=schema)
             writer.write_table(table)
 
         writer.close()
         print(f"Parquet file generated at {output_path}")
-
     else:
-        print(f"Parquet file already exists at {output_path}. Loading caches...")
+        print(f"Parquet file already exists at {output_path}. Streaming caches...")
 
-    df = pd.read_parquet(output_path)
+    def cache_stream():
+        pf = pq.ParquetFile(output_path)
+        for batch in pf.iter_batches(batch_size=1):
+            df = batch.to_pandas()
+            for _, row in df.iterrows():
+                yield {
+                    "clean_cache": dict_to_torch(json.loads(row["clean_caches"])),
+                    "corrupt_cache": dict_to_torch(json.loads(row["corrupt_caches"])),
+                    "logit_diff": row["logit_diffs"]
+                }
 
-    df["clean_caches"] = df["clean_caches"].apply(json.loads).apply(dict_to_torch)
-    df["corrupt_caches"] = df["corrupt_caches"].apply(json.loads).apply(dict_to_torch)
+    return cache_stream()
 
-    return df
-
-def iter_parquet_rows(path):
-    pf = pq.ParquetFile(path)
-    for batch in pf.iter_batches():
-        df = batch.to_pandas()
-        for _, row in df.iterrows():
-            yield {
-                "clean": dict_to_torch(json.loads(row["clean_caches"])),
-                "corrupt": dict_to_torch(json.loads(row["corrupt_caches"])),
-                "ld": row["logit_diffs"]
-            }
-
-def run_patching(df, dataset, model, components=None):
+def run_patching(dataset, model, cache_stream, Yes_index, No_index, components=None):
     num_layers = model.cfg.n_layers
 
-    components = {
-        "attn_heads": lambda L: f"blocks.{L}.attn.hook_result",
-        "mlp": lambda L: f"blocks.{L}.mlp.hook_post",
-        "resid_post": lambda L: f"blocks.{L}.hook_resid_post"
-    }
+    if components is None:
+        components = {
+            "attn_heads": lambda L: f"blocks.{L}.attn.hook_result",
+            "mlp": lambda L: f"blocks.{L}.mlp.hook_post",
+            "resid_post": lambda L: f"blocks.{L}.hook_resid_post"
+        }
 
     patch_effects = {}
     for name in components:
-        if name == "attn_heads":
-            patch_effects[name] = t.zeros(num_layers, model.cfg.n_heads)
-        else:
-            patch_effects[name] = t.zeros(num_layers)
+        device = model.cfg.device
 
-    for i, (clean, corrupt, a, b, label) in enumerate(tqdm(dataset, total=len(df))):
+        if name == "attn_heads":
+            patch_effects[name] = t.zeros(num_layers, model.cfg.n_heads, device=device).to(device)
+        else:
+            patch_effects[name] = t.zeros(num_layers, device=device).to(device)
+
+    for (clean, corrupt, a, b, label), cache_row in tqdm(zip(dataset, cache_stream), total=len(dataset)):
         pos = get_last_pos(model, corrupt)
-        clean_cache = df.loc[i, "clean_caches"]
-        corrupt_cache = df.loc[i, "corrupt_caches"]
-        base_ld = df.loc[i, "logit_diffs"]
+        clean_cache = {k: v.to(model.cfg.device) for k, v in cache_row["clean_cache"].items()}
+        corrupt_cache = {k: v.to(model.cfg.device) for k, v in cache_row["corrupt_cache"].items()}
+        base_ld = cache_row["logit_diff"]
 
         for name, hook_fn in components.items():
             for L in range(num_layers):
                 hook_name = hook_fn(L)
-                patched_ld = patch_component(model, corrupt, clean_cache, hook_name, pos)
+                patched_ld = patch_component(model, corrupt, clean_cache, hook_name, pos, Yes_index, No_index)
                 patch_effects[name][L] += patched_ld - base_ld
 
     for name in patch_effects:
-        patch_effects[name] /= len(df)
+        patch_effects[name] /= len(dataset)
 
     return patch_effects
 
-def plot_attention_head_heatmap(patch_effects, model, output_path="./figures"):
-    if output_path == None:
-        print("Provide valid output_path")
-        return None
-
+def plot_attention_head_heatmap(patch_effects, output_path="./figures"):
     attn = patch_effects["attn_heads"].cpu().numpy()
-
+    os.makedirs(output_path, exist_ok=True)
     plt.figure(figsize=(12, 6))
     plt.imshow(attn, cmap="coolwarm", aspect="auto")
     plt.colorbar(label="Δ logit diff (patched - corrupted)")
     plt.xlabel("Head")
     plt.ylabel("Layer")
     plt.title("Attention Head Patch Effects")
-
-    save_path = os.path.join(output_path, "attn_head_patch_heatmap.png")
-    plt.savefig(save_path, dpi=300)
+    plt.savefig(os.path.join(output_path, "attn_head_patch_heatmap.png"), dpi=300)
     plt.close()
 
-def plot_mlp_patch_bar(patch_effects, model, output_path):
-    if output_path == None:
-        print("Provide valid output_path")
-        return None
-
+def plot_mlp_patch_bar(patch_effects, output_path="./figures"):
     mlp = patch_effects["mlp"].cpu().numpy()
-
+    os.makedirs(output_path, exist_ok=True)
     plt.figure(figsize=(10, 4))
     plt.bar(range(len(mlp)), mlp)
     plt.title("MLP Patch Effects per Layer")
     plt.xlabel("Layer")
     plt.ylabel("Δ logit diff")
-
-    save_path = os.path.join(output_path, "mlp_patch_effects.png")
-    plt.savefig(save_path, dpi=300)
+    plt.savefig(os.path.join(output_path, "mlp_patch_effects.png"), dpi=300)
     plt.close()
 
-def plot_resid_patch_bar(patch_effects, model, output_path="./figures"):
-    if output_path == None:
-        print("Provide valid output_path")
-        return None
-
+def plot_resid_patch_bar(patch_effects, output_path="./figures"):
     resid = patch_effects["resid_post"].cpu().numpy()
-
+    os.makedirs(output_path, exist_ok=True)
     plt.figure(figsize=(10, 4))
     plt.bar(range(len(resid)), resid)
     plt.title("Residual Stream Patch Effects")
     plt.xlabel("Layer")
     plt.ylabel("Δ logit diff")
-
-    save_path = os.path.join(output_path, "resid_patch_effects.png")
-    plt.savefig(save_path, dpi=300)
+    plt.savefig(os.path.join(output_path, "resid_patch_effects.png"), dpi=300)
     plt.close()
+
+def plot_all_patch_effects(patch_effects, output_path="./figures", save_name="patch_summary.png"):
+    os.makedirs(output_path, exist_ok=True)
+
+    resid = patch_effects["resid_post"].detach().cpu().numpy()
+    mlp = patch_effects["mlp"].detach().cpu().numpy()
+    attn_heads = patch_effects["attn_heads"].detach().cpu().numpy()
+
+    num_layers = attn_heads.shape[0]
+    num_heads = attn_heads.shape[1]
+
+    fig = plt.figure(figsize=(18, 6), dpi=200)
+
+    gs = fig.add_gridspec(1, 4, width_ratios=[1.2, 1.2, 1.2, 1.2], wspace=0.4)
+
+    # ----------------- (a) Residual Stream -----------------
+    ax0 = fig.add_subplot(gs[0, 0])
+    im0 = ax0.imshow(resid[:, None], cmap="coolwarm", vmin=-np.abs(resid).max(), vmax=np.abs(resid).max(), aspect="auto")
+    ax0.set_title("Residual Stream")
+    ax0.set_ylabel("Layer")
+    ax0.set_xticks([])
+    fig.colorbar(im0, ax=ax0, fraction=0.046)
+
+    # ----------------- (b) MLP Output -----------------
+    ax1 = fig.add_subplot(gs[0, 1])
+    im1 = ax1.imshow(mlp[:, None], cmap="coolwarm", vmin=-np.abs(mlp).max(), vmax=np.abs(mlp).max(), aspect="auto")
+    ax1.set_title("MLP Output")
+    ax1.set_xticks([])
+    ax1.set_yticks([])
+    fig.colorbar(im1, ax=ax1, fraction=0.046)
+
+    # ----------------- (c) Attn Head Output -----------------
+    ax2 = fig.add_subplot(gs[0, 2])
+    im2 = ax2.imshow(attn_heads, cmap="coolwarm",
+                     vmin=-np.abs(attn_heads).max(), vmax=np.abs(attn_heads).max(),
+                     aspect="auto")
+    ax2.set_title("Attn Head Output")
+    ax2.set_xlabel("Head")
+    ax2.set_yticks([])
+    fig.colorbar(im2, ax=ax2, fraction=0.046)
+
+    # ----------------- (d) Mean Attn Across Heads -----------------
+    ax3 = fig.add_subplot(gs[0, 3])
+    attn_mean = attn_heads.mean(axis=1)
+    im3 = ax3.imshow(attn_mean[:, None], cmap="coolwarm",
+                     vmin=-np.abs(attn_mean).max(), vmax=np.abs(attn_mean).max(),
+                     aspect="auto")
+    ax3.set_title("Mean Head Effect")
+    ax3.set_yticks([])
+    ax3.set_xticks([])
+    fig.colorbar(im3, ax=ax3, fraction=0.046)
+
+    # Panel labels
+    for i, ax in enumerate([ax0, ax1, ax2, ax3]):
+        ax.text(-0.12, 1.05, f"({chr(ord('a') + i)})",
+                transform=ax.transAxes, fontsize=13, fontweight="bold")
+
+    plt.tight_layout()
+    fig.savefig(os.path.join(output_path, save_name))
+    plt.close(fig)
+
+def get_logit_diff(logits, answer_token_indices, mean=True):
+    answer_token_indices = answer_token_indices.to(logits.device)
+
+    if logits.ndim == 3:
+        logits = logits[:, -1, :]  # final token only
+
+    correct = answer_token_indices[:, 0]
+    incorrect = answer_token_indices[:, 1]
+
+    diff = logits.gather(1, correct.unsqueeze(1)) - logits.gather(1, incorrect.unsqueeze(1))
+
+    return diff.mean() if mean else diff
+
+
+def paper_plot(fig, tickangle=60):
+    """
+    Applies styling to the given plotly figure object targeting paper plot quality.
+    """
+    fig.update_layout({
+        'template': 'plotly_white',
+    })
+    fig.update_xaxes(showline=True, linewidth=2, linecolor='black', tickangle=tickangle,
+                    gridcolor='rgb(200,200,200)', griddash='dash', zeroline=False)
+    fig.update_yaxes(showline=True, linewidth=2, linecolor='black',
+                    gridcolor='rgb(200,200,200)', griddash='dash', zeroline=False)
+    fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+
+    return fig
+
+def compute_act_patching(model: HookedTransformer,
+                         metric: callable,
+                         CLEAN_BASELINE: float,
+                         CORRUPTED_BASELINE: float,
+                         patching_type: str,
+                         batches_base_tokens: list,
+                         batches_src_tokens: list,
+                         batches_answer_token_indices: list,
+                         batches: int):
+    # resid_streams
+    # heads_all_pos : attn heads all positions at the same time
+    # heads_last_pos: attn heads last position
+    # full: (resid streams, attn block outs and mlp outs)
+    list_resid_pre_act_patch_results = []
+    for batch in range(batches):
+        base_tokens = batches_base_tokens[batch]
+        src_tokens = batches_src_tokens[batch]
+        base_logits, base_cache = model.run_with_cache(base_tokens)
+        src_logits, _ = model.run_with_cache(src_tokens)
+        answer_token_indices = batches_answer_token_indices[batch]
+        
+        metric_fn = partial(metric, answer_token_indices=answer_token_indices, CLEAN_BASELINE=CLEAN_BASELINE, CORRUPTED_BASELINE=CORRUPTED_BASELINE)
+        if patching_type=='resid_streams':
+            # resid_pre_act_patch_results -> [n_layers, pos]
+            patch_results = patching.get_act_patch_resid_pre(model, src_tokens, base_cache, metric_fn)
+        elif patching_type=='heads_all_pos':
+            patch_results = patching.get_act_patch_attn_head_out_all_pos(model, src_tokens, base_cache, metric_fn)
+        elif patching_type=='heads_last_pos':
+            # Activation patching per position
+            attn_head_out_per_pos_patch_results = patching.get_act_patch_attn_head_out_by_pos(model, src_tokens, base_cache, metric_fn)
+            # Select last position
+            patch_results = attn_head_out_per_pos_patch_results[:,-1]
+        elif patching_type=='full':
+            patch_results = patching.get_act_patch_block_every(model, src_tokens, base_cache, metric_fn)
+        
+        list_resid_pre_act_patch_results.append(patch_results)
+
+    total_resid_pre_act_patch_results = t.stack(list_resid_pre_act_patch_results, 0).mean(0)
+
+    return total_resid_pre_act_patch_results
+
+def build_numeric_batches(model, dataset, yes_id, no_id, device, batch_size=32):
+    base_toks, src_toks = [], []
+    correct_ids, wrong_ids = [], []
+
+    for clean, corrupt, a, b, label in dataset:
+        base_toks.append(model.to_tokens(clean, prepend_bos=True))
+        src_toks.append(model.to_tokens(corrupt, prepend_bos=True))
+        
+        correct = yes_id if label == 1 else no_id
+        incorrect = no_id if label == 1 else yes_id
+        correct_ids.append(correct)
+        wrong_ids.append(incorrect)
+
+    max_len = max(seq.shape[-1] for seq in base_toks + src_toks)
+
+    def pad(seq):
+        pad_amount = max_len - seq.shape[-1]
+        if pad_amount > 0:
+            pad_token = model.tokenizer.pad_token_id
+            pad_tensor = t.full((1, pad_amount), pad_token, device=device)
+            return t.cat([seq.to(device), pad_tensor], dim=-1)
+        return seq.to(device)
+
+    base_all = t.cat([pad(x) for x in base_toks], dim=0)
+    src_all = t.cat([pad(x) for x in src_toks], dim=0)
+
+    correct_ids = t.tensor(correct_ids, device=device)
+    wrong_ids = t.tensor(wrong_ids, device=device)
+
+    batches_base, batches_src, batches_ans = [], [], []
+
+    for i in range(0, len(dataset), batch_size):
+        bb = base_all[i:i+batch_size]
+        sb = src_all[i:i+batch_size]
+        ci = correct_ids[i:i+batch_size]
+        wi = wrong_ids[i:i+batch_size]
+
+        ans = t.stack([ci, wi], dim=1)
+        batches_base.append(bb)
+        batches_src.append(sb)
+        batches_ans.append(ans)
+
+    return batches_base, batches_src, batches_ans
+
+def compute_baselines(model, batches_base, batches_src, batches_ans):
+    base_diffs, src_diffs = [], []
+    for bb, sb, ans in zip(batches_base, batches_src, batches_ans):
+        base_logits = model(bb)
+        src_logits = model(sb)
+        base_diffs.append(get_logit_diff(base_logits, ans, mean=False))
+        src_diffs.append(get_logit_diff(src_logits, ans, mean=False))
+
+    CLEAN_BASELINE = t.cat(base_diffs).mean()
+    CORRUPTED_BASELINE = t.cat(src_diffs).mean()
+    return CLEAN_BASELINE, CORRUPTED_BASELINE
+
+def numeric_metric(logits, answer_token_indices, CLEAN_BASELINE, CORRUPTED_BASELINE):
+    ld = get_logit_diff(logits, answer_token_indices, mean=False)
+    normalized = (ld - CORRUPTED_BASELINE) / (CLEAN_BASELINE - CORRUPTED_BASELINE)
+    return normalized.mean()
+
+def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patch_heads, output_folder):
+    """
+    Paper-style activation patching visualization using neel_plotly.
+    Saves:
+        - patch_blocks.png (resid+attn+mlp)
+        - patch_heads.png (attn heads)
+    """
+    os.makedirs(output_folder, exist_ok=True)
+
+    num_layers = model.cfg.n_layers
+    num_pos = patch_resid.size(1)
+    num_heads = patch_heads.size(1)
+
+    # Flip layers so final layers are shown at top
+    resid = t.flip(patch_resid, dims=[0])
+    attn = t.flip(patch_attn, dims=[0])
+    mlp = t.flip(patch_mlp, dims=[0])
+    heads = t.flip(patch_heads, dims=[0])
+
+    y_labels = [f"L{L}" for L in range(num_layers - 1, -1, -1)]
+    x_pos = [f"pos {i}" for i in range(num_pos)]
+    x_heads = [f"H{i}" for i in range(num_heads)]
+
+    # ============ LEFT FIGURE (3 components shared) ============
+    stack = t.stack([resid, attn, mlp], dim=0)
+
+    fig_blocks = imshow(
+        stack,
+        facet_col=0,
+        facet_labels=["Residual Stream", "Attn Output", "MLP Output"],
+        y=y_labels,
+        x=x_pos,
+        zmin=-1, zmax=1,
+        color_continuous_scale="RdBu",
+        title="Residual / Attention / MLP Patch Effects",
+        return_fig=True
+    )
+    fig_blocks.update_xaxes(tickangle=45)
+    fig_blocks.update_coloraxes(colorbar=dict(title="Δ Logit Diff"))
+    fig_blocks.show()
+
+    blocks_path = os.path.join(output_folder, "patch_blocks.png")
+    fig_blocks.write_image(blocks_path, scale=3, width=1100, height=600)
+    print(f"Saved: {blocks_path}")
+
+    # ============ RIGHT FIGURE (heads) ============
+    fig_heads = imshow(
+        heads,
+        y=y_labels,
+        x=x_heads,
+        zmin=-1, zmax=1,
+        color_continuous_scale="RdBu",
+        title="Attention Heads Patch Effects (Last Position)",
+        return_fig=True
+    )
+    fig_heads.update_xaxes(tickangle=45)
+    fig_heads.update_coloraxes(colorbar=dict(title="Δ Logit Diff"))
+    fig_heads.show()
+
+    heads_path = os.path.join(output_folder, "patch_heads.png")
+    fig_heads.write_image(heads_path, scale=3, width=700, height=600)
+    print(f"Saved: {heads_path}")

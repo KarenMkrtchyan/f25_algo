@@ -41,7 +41,15 @@ from .Functions import (
     run_patching,
     plot_attention_head_heatmap,
     plot_mlp_patch_bar,
-    plot_resid_patch_bar
+    plot_resid_patch_bar,
+    plot_all_patch_effects,
+    compute_act_patching,
+    get_logit_diff,
+    paper_plot,
+    build_numeric_batches,
+    compute_baselines,
+    numeric_metric,
+    plot_all_patch_effects_paper
 )
 
 # Version information

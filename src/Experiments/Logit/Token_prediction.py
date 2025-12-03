@@ -6,8 +6,8 @@ from utils.model_config import load_model
 
 model = load_model("gpt2-small")
 
-#example_prompt = "After John and Mary went to the store, John gave a bottle of milk to"
-example_prompt = "Is 7 > 3? Answer:"
+example_prompt = "After John and Mary went to the store, John gave a bottle of milk to"
+#example_prompt = "Is 77777777 < 3? Answer:"
 example_answer = " Mary"
 print("\n")
 print("Prompt tokens:", model.to_tokens(example_prompt, prepend_bos = True))
