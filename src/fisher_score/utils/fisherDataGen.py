@@ -1,14 +1,17 @@
+# FisherDataGen.py
+
 import random
 from typing import Dict, List, DefaultDict
 from collections import defaultdict
+
 
 class FisherDataGenerator:
     def __init__(self, seed: int | None = None):
         self.rng = random.Random(seed)
 
-    def _build_number(self, hundreds: int, tens: int, units: int) -> int:
-        """Combine digits into a 3-digit number."""
-        return hundreds * 100 + tens * 10 + units
+        def _build_number(self, tt: int, th: int, h: int, t: int, u: int) -> int:
+          """Combine digits into a 5-digit number."""
+          return tt * 10000 + th * 1000 + h * 100 + t * 10 + u
 
     def _sample_for_pair(
         self,

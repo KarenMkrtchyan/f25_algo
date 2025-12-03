@@ -221,3 +221,4 @@ venv/
 
 echo ".vscode/" >> .gitignore
 .vscode/
+src/Experiments/Attention/results/

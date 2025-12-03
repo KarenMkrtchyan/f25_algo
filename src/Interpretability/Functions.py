@@ -435,11 +435,11 @@ def display_attention_heads(model, text_or_tokens, cache, layer=0, position=0):
     else:
         tokens = model.to_str_tokens(text_or_tokens)
 
-    attention = cache["pattern", layer][0].detach().cpu().numpy()  # batch dim → [head, q, k]
+    attention = cache["pattern", layer]
 
-    attention_at_position = attention[:, position, :]  # shape: [head, key_pos]
+    attention_matrix = attention[0]
 
-    vis = cv.attention.attention_heads(tokens=tokens, attention=attention_at_position)
+    vis = cv.attention.attention_heads(tokens=tokens, attention=attention_matrix)
     return vis
 
 def display_attention_patterns(model, text_or_tokens, cache, layer=0, position=0):
@@ -1106,6 +1106,7 @@ def plot_resid_patch_bar(patch_effects, output_path="./figures"):
     plt.savefig(os.path.join(output_path, "resid_patch_effects.png"), dpi=300)
     plt.close()
 
+<<<<<<< HEAD
 def plot_all_patch_effects(patch_effects, output_path="./figures", save_name="patch_summary.png"):
     os.makedirs(output_path, exist_ok=True)
 
@@ -1359,3 +1360,29 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
     heads_path = os.path.join(output_folder, "patch_heads.png")
     fig_heads.write_image(heads_path, scale=3, width=700, height=600)
     print(f"Saved: {heads_path}")
+=======
+    save_path = os.path.join(output_path, "resid_patch_effects.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+def head_mean_ablation_hook_by_pos(
+    z: t.Tensor,
+    hook: HookPoint,
+    head_index_to_ablate: int,
+    pos_to_ablate: int,
+):
+    """
+    Hook function to replace a specific attention head at a specific position with its mean.
+    
+    Args:
+        z: Attention head outputs
+        hook: Hook point object
+        head_index_to_ablate: Index of head to ablate
+        pos_to_ablate: position to ablate
+    """
+
+    baseline = z[:, :, head_index_to_ablate, :].mean(dim=(0, 1))
+    z[:, pos_to_ablate, head_index_to_ablate, :] = baseline
+
+    return z
+>>>>>>> 96fd584d0d795f6d661124b87fb1a74ab9b85f9c
