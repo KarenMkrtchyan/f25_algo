@@ -3,12 +3,11 @@ import sys
 import os
 from data.prompts import prompts as prompt_list
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from Interpretability.path_patching import path_patch, Node, IterNode, imshow, hist
+from Interpretability.path_patching import path_patch, Node, IterNode, imshow, hist, path_patch_sender_to_receiver_logits
 from transformer_lens.HookedTransformer import HookedTransformer
 import torch as t
 from torch import Tensor
 from jaxtyping import Float, Int, Bool
-
 
 # %%
 device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
@@ -164,4 +163,35 @@ imshow(
     margin={"r": 100, "l": 100},
     border=True,
 )
+# %%
+# Patching head to head
+
+SENDER_HEADS= [(0, 4),(0, 3),(0, 1),(24, 7),(0, 10),(0, 12),(24, 5),(19, 0),(20,12),(0,13),(19,11),(34,14),(4,12),(9,9),(19,2),(28,2),(28,5)]
+RECEIVER_HEADS = SENDER_HEADS
+
+head_patch_res = []
+
+for s_layer, s_head in SENDER_HEADS:
+    for r_layer, r_head in RECEIVER_HEADS:
+        if s_layer < r_layer:
+            score = path_patch_sender_to_receiver_logits(
+                model,
+                clean_tokens,
+                flipped_tokens,
+                sender_head=(s_layer, s_head),
+                receiver_head=(r_layer, r_head),
+                metric=greater_than_metric_noising
+            )
+            print(f"Edge {s_layer}.{s_head} -> {r_layer}.{r_head}: {score:.5f}")
+            head_patch_res.append({
+                'sender': f"{s_layer}.{s_head}",
+                'receiver': f"{r_layer}.{r_head}",
+                'score': score
+            })
+
+head_patch_res = sorted(head_patch_res, key=lambda x: x['score'], reverse=True)
+
+for item in head_patch_res:
+    print(f"Edge {item['sender']} -> {item['receiver']}: {item['score']:.5f}")
+
 # %%

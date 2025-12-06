@@ -969,3 +969,78 @@ def hist(tensor, renderer=None, **kwargs):
         for i in range(len(fig.data)):
             fig.data[i]["name"] = names[i // 2]
     fig.show(renderer)
+
+
+def path_patch_sender_to_receiver_logits(
+    model, 
+    clean_tokens, 
+    corrupted_tokens, 
+    sender_head,
+    receiver_head,
+    metric,
+):
+    """
+    Measures the effect of the sender to receiver path on the final metric.
+    
+    Getting baseline corrupted logits, patching sender to clean and measuring receiver's output change.
+    Patching that receiver change forward to get new logits and computing metric on the patched logits.
+    """
+    s_layer, s_head_idx = sender_head
+    r_layer, r_head_idx = receiver_head
+    
+    if s_layer >= r_layer:
+        raise ValueError(f"Sender layer {s_layer} must be before receiver layer {r_layer}")
+    
+    model.reset_hooks()
+    
+
+    with t.no_grad():
+        _, corrupted_cache = model.run_with_cache(
+            corrupted_tokens,
+            names_filter=lambda name: name == utils.get_act_name("z", r_layer)
+        )
+    corrupted_receiver_z = corrupted_cache[utils.get_act_name("z", r_layer)][:, :, r_head_idx, :]
+    
+    with t.no_grad():
+        _, clean_cache = model.run_with_cache(
+            clean_tokens,
+            names_filter=lambda name: name == utils.get_act_name("z", s_layer)
+        )
+    clean_sender_z = clean_cache[utils.get_act_name("z", s_layer)][:, :, s_head_idx, :]
+    
+    def sender_patch_hook(z, hook):
+        z[:, :, s_head_idx, :] = clean_sender_z
+        return z
+    
+    model.add_hook(
+        utils.get_act_name("z", s_layer),
+        sender_patch_hook
+    )
+    
+    with t.no_grad():
+        _, patched_cache = model.run_with_cache(
+            corrupted_tokens,
+            names_filter=lambda name: name == utils.get_act_name("z", r_layer)
+        )
+    patched_receiver_z = patched_cache[utils.get_act_name("z", r_layer)][:, :, r_head_idx, :]
+    
+    model.reset_hooks()
+    
+    receiver_diff = patched_receiver_z - corrupted_receiver_z
+    
+    #Patch this difference forward to get final logits
+    def receiver_patch_hook(z, hook):
+        z[:, :, r_head_idx, :] = corrupted_receiver_z + receiver_diff
+        return z
+    
+    model.add_hook(
+        utils.get_act_name("z", r_layer),
+        receiver_patch_hook
+    )
+    
+    with t.no_grad():
+        patched_logits = model(corrupted_tokens)
+    
+    model.reset_hooks()
+    
+    return metric(patched_logits)

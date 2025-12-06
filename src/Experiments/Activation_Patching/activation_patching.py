@@ -3,11 +3,13 @@ import sys
 import os
 import pandas as pd
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-import torch
+import torch as t
 import plotly.express as px
 from data.prompts import prompts
 
-torch.cuda.empty_cache()
+t.cuda.empty_cache()
+device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
+t.set_grad_enabled(False)
 
 results_dir = "results"
 os.makedirs(results_dir, exist_ok=True)
@@ -17,12 +19,14 @@ from transformer_lens.patching import get_act_patch_attn_head_out_by_pos
 from transformer_lens.HookedTransformer import HookedTransformer
 
 
-model = HookedTransformer.from_pretrained("qwen2.5-3b")
+#%%
+
+model = HookedTransformer.from_pretrained("microsoft/Phi-3-mini-4k-instruct")
 
 n_layers = model.cfg.n_layers
 n_heads = model.cfg.n_heads
 
-head_counts = torch.zeros(n_layers, n_heads, dtype=torch.long)
+head_counts = t.zeros(n_layers, n_heads, dtype=t.long)
 
 #%% 
 for i, item in enumerate(prompts):
@@ -58,7 +62,7 @@ for i, item in enumerate(prompts):
         patching_metric=logit_diff_metric
     )
     
-    torch.save(tensor_result.cpu(), os.path.join(results_dir, f"patching_result{i:03d}.pt"))
+    t.save(tensor_result.cpu(), os.path.join(results_dir, f"patching_result_phi{i:03d}.pt"))
 
     std_threshold = 5.0
     n_layers, n_positions, n_heads = tensor_result.shape
@@ -71,7 +75,7 @@ for i, item in enumerate(prompts):
         std_score = flat.std()
 
         cutoff = mean_score + (std_threshold * std_score)
-        significant_indices = torch.nonzero(flat > cutoff).squeeze()
+        significant_indices = t.nonzero(flat > cutoff).squeeze()
 
         if significant_indices.numel() > 0:
             if significant_indices.dim() == 0:
@@ -86,8 +90,8 @@ for i, item in enumerate(prompts):
 #%%
 # save metadata
 
-torch.save(head_counts, os.path.join(results_dir, "head_counts.pt"))
-torch.save(
+t.save(head_counts, os.path.join(results_dir, "head_counts.pt"))
+t.save(
     {
         "n_layers": n_layers,
         "n_heads": n_heads,

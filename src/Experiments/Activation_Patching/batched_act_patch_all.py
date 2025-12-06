@@ -17,7 +17,7 @@ device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
 model = HookedTransformer.from_pretrained(
-    "qwen2.5-3b",
+    "qwen3-1.7b",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
@@ -31,6 +31,7 @@ prompts = [p["clean_prompt"] for p in prompt_list]
 labels = [p["clean_label"] for p in prompt_list]
 
 # Define the answers for each prompt, in the form (correct, incorrect)
+#%%
 answers = [("Yes", "No") if label == "Yes" else ("No", "Yes") for label in labels]
 
 # Define the answer tokens (same shape as the answers)
@@ -84,6 +85,7 @@ print(
 
 print(f"Clean logit diff: {clean_logit_diff:.4f}")
 print(f"Flipped logit diff: {flipped_logit_diff:.4f}")
+
 #%%
 
 def greater_than_metric_noising(

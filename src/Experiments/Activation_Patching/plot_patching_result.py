@@ -10,13 +10,22 @@ from transformer_lens import HookedTransformer
 
 # %%
 
-model = HookedTransformer.from_pretrained("qwen2.5-3b")
+model = HookedTransformer.from_pretrained("microsoft/Phi-3-mini-4k-instruct")
 
 #%%
+#%%
+prompts = [
+  {
+    "clean_prompt": "Is 9432 > 8231? Answer: ",
+    "corrupted_prompt": "Is 8231 > 9432? Answer: ",
+    "clean_label": " Yes",
+    "corrupted_label": " No"
+  },
+]
 
 # plot one heatmap per position
-patching_result = torch.load("results/patching_result016.pt")
-prompt = prompts[16]["clean_prompt"]
+patching_result = torch.load("results/patching_result_phi000.pt")
+prompt = prompts[0]["clean_prompt"]
 
 #%%
 tokens = model.to_str_tokens(prompt)
