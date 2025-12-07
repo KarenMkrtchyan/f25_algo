@@ -10,9 +10,8 @@ from transformer_lens import HookedTransformer
 
 # %%
 
-model = HookedTransformer.from_pretrained("microsoft/Phi-3-mini-4k-instruct")
+model = HookedTransformer.from_pretrained("meta-llama/Llama-3.2-3B")
 
-#%%
 #%%
 prompts = [
   {
@@ -24,7 +23,7 @@ prompts = [
 ]
 
 # plot one heatmap per position
-patching_result = torch.load("results/patching_result_phi000.pt")
+patching_result = torch.load("results/patching_result_llama3b000.pt")
 prompt = prompts[0]["clean_prompt"]
 
 #%%

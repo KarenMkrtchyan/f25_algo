@@ -189,6 +189,7 @@ for s_layer, s_head in SENDER_HEADS:
                 'score': score
             })
 
+#%%
 head_patch_res = sorted(head_patch_res, key=lambda x: x['score'], reverse=True)
 
 for item in head_patch_res:

@@ -993,42 +993,44 @@ def path_patch_sender_to_receiver_logits(
     
     model.reset_hooks()
     
-
     with t.no_grad():
-        _, corrupted_cache = model.run_with_cache(
-            corrupted_tokens,
-            names_filter=lambda name: name == utils.get_act_name("z", r_layer)
-        )
-    corrupted_receiver_z = corrupted_cache[utils.get_act_name("z", r_layer)][:, :, r_head_idx, :]
+        _, corrupted_cache = model.run_with_cache(corrupted_tokens)
+    corrupted_receiver_z = corrupted_cache[utils.get_act_name("z", r_layer)][:, :, r_head_idx, :].clone()
     
     with t.no_grad():
         _, clean_cache = model.run_with_cache(
             clean_tokens,
             names_filter=lambda name: name == utils.get_act_name("z", s_layer)
         )
-    clean_sender_z = clean_cache[utils.get_act_name("z", s_layer)][:, :, s_head_idx, :]
+    clean_sender_z = clean_cache[utils.get_act_name("z", s_layer)][:, :, s_head_idx, :].clone()
     
-    def sender_patch_hook(z, hook):
-        z[:, :, s_head_idx, :] = clean_sender_z
-        return z
+    def sender_patch_and_freeze_hook(z, hook):
+        # Freeze to corrupted by default
+        z_new = corrupted_cache[hook.name].clone()
+        
+        if hook.layer() == s_layer:
+            z_new[:, :, s_head_idx, :] = clean_sender_z
+        
+        return z_new
     
-    model.add_hook(
-        utils.get_act_name("z", s_layer),
-        sender_patch_hook
-    )
+    for layer in range(s_layer, r_layer):
+        model.add_hook(
+            utils.get_act_name("z", layer),
+            sender_patch_and_freeze_hook
+        )
     
     with t.no_grad():
         _, patched_cache = model.run_with_cache(
             corrupted_tokens,
             names_filter=lambda name: name == utils.get_act_name("z", r_layer)
         )
-    patched_receiver_z = patched_cache[utils.get_act_name("z", r_layer)][:, :, r_head_idx, :]
+    patched_receiver_z = patched_cache[utils.get_act_name("z", r_layer)][:, :, r_head_idx, :].clone()
     
     model.reset_hooks()
     
     receiver_diff = patched_receiver_z - corrupted_receiver_z
     
-    #Patch this difference forward to get final logits
+    # Patch this difference forward to get final logits
     def receiver_patch_hook(z, hook):
         z[:, :, r_head_idx, :] = corrupted_receiver_z + receiver_diff
         return z
