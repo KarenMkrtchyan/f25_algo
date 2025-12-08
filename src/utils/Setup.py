@@ -31,18 +31,13 @@ from transformer_lens import (
     utils,
 )
 from transformer_lens.hook_points import HookPoint
+from device_utils import get_device
 
-device = t.device(
-    "mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu"
-)
+device = get_device()
 
 print(f"\nUsing device: {device}")
-
 t.set_grad_enabled(False)
 
 MAIN = __name__ == "__main__"
 if MAIN:
     print("Setup complete. Ready for transformer experiments!")
-
-    x = t.randn(2, 3, device=device)
-    print("Sample tensor:", x)

@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import sys
 import torch as t
 import numpy as np
@@ -13,9 +14,8 @@ import transformer_lens.utils as utils
 
 dataset = build_dataset(n=10, low=1000, high=9999)
 
-model_name = "qwen2.5-3b"
+model_name = "pythia-160m"
 model = load_model(model_name)
-device = utils.get_device()
 
 yes_id = model.to_single_token(" Yes")
 no_id = model.to_single_token(" No")
@@ -50,7 +50,7 @@ print("Activation patching complete!")
 
 tokens_str = model.to_str_tokens(model.to_tokens("Is 1234 > 5678? Answer:"))
 results_folder = "Results"
-display_folder = os.path.join(results_folder, "Digit Experiment")
+display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "4digit")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
