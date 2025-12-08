@@ -9,22 +9,20 @@ from test_suite.eval import run_benchmark
 
 from functools import partial
 from transformer_lens import HookedTransformer, utils
-from data.head_list import head_list
+from data.head_list import head_list_qwen17
 
 torch.set_grad_enabled(False)
 torch.cuda.empty_cache()
 
-model = HookedTransformer.from_pretrained("qwen2.5-3b")
+model = HookedTransformer.from_pretrained("Qwen/Qwen3-1.7b")
 
-tasks = ["greater_than_3_digit", "greater_than_4_digit", "greater_than_7_digit"]
+tasks = ["greater_than_4_digit"]
 
 for task in tasks:
     # # of token positions
-    if (task == "greater_than_3_digit"): n_positions = 14
     if (task == "greater_than_4_digit"): n_positions = 16
-    if (task == "greater_than_7_digit"): n_positions = 22
 
-    for head in head_list:
+    for head in head_list_qwen17:
         hook_name = utils.get_act_name("z", head["layer"])
         results = []
 
@@ -50,3 +48,6 @@ for task in tasks:
                     ablated_head=f"L{head['layer']}H{head['head']}",
                     ablated_pos=pos,
                 )
+
+
+# %%

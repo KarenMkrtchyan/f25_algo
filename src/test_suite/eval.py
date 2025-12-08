@@ -92,10 +92,11 @@ def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_he
 
     model_name_str = model if isinstance(model, str) else "custom_model"
     model_name_str = model_name_str.replace("/", "__")
+    model_name_str = "qwen3-1.7b"
 
     file_name = os.path.join(
         output_dir,
-        task_name,
+        model_name_str,
         f"accuracy_eval_{model_name_str}_{ablated_head}_{ablated_pos}_{task_name}_{num_fewshot}shot_RUN{run}.csv",
     )
 

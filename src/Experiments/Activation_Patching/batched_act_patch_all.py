@@ -17,7 +17,7 @@ device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
 model = HookedTransformer.from_pretrained(
-    "qwen3-1.7b",
+    "Qwen/Qwen3-1.7b",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
@@ -129,7 +129,7 @@ imshow(
     width=1300,
     margin={"r": 100, "l": 100}
 )
-# %%
+# %% Attnetion head output
 
 results = act_patch(
     model=model,
@@ -150,5 +150,8 @@ imshow(
     width=600,
     margin={"r": 100, "l": 100}
 )
+
+# %%
+hist(results['z'].detach().cpu().flatten())
 
 # %%

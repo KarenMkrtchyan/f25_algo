@@ -1360,10 +1360,6 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
     fig_heads.write_image(heads_path, scale=3, width=700, height=600)
     print(f"Saved: {heads_path}")
 
-    save_path = os.path.join(output_folder, "resid_patch_effects.png")
-    plt.savefig(save_path, dpi=300)
-    plt.close()
-
 def head_mean_ablation_hook_by_pos(
     z: t.Tensor,
     hook: HookPoint,
@@ -1379,7 +1375,6 @@ def head_mean_ablation_hook_by_pos(
         head_index_to_ablate: Index of head to ablate
         pos_to_ablate: position to ablate
     """
-
     baseline = z[:, :, head_index_to_ablate, :].mean(dim=(0, 1))
     z[:, pos_to_ablate, head_index_to_ablate, :] = baseline
 
