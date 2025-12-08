@@ -15,7 +15,7 @@ t.set_grad_enabled(False)
 
 
 model = HookedTransformer.from_pretrained(
-    "qwen2.5-3b",
+    "Qwen/Qwen2.5-3b",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
@@ -84,7 +84,7 @@ print(f"Clean logit diff: {clean_logit_diff:.4f}")
 print(f"Flipped logit diff: {flipped_logit_diff:.4f}")
 #%%
 
-def greater_than_metric_noising(
+def greater_than_metric_denoising(
     logits: Float[Tensor, "batch seq d_vocab"],
     answer_tokens: Float[Tensor, "batch 2"] = answer_tokens,
     flipped_logit_diff: float = flipped_logit_diff,
@@ -101,6 +101,22 @@ labels =[f"{tok} {i}" for i, tok in enumerate(model.to_str_tokens(clean_tokens[0
 
 
 #%%
+def greater_than_metric_noising(
+    logits: Float[Tensor, "batch seq d_vocab"],
+    answer_tokens: Float[Tensor, "batch 2"] = answer_tokens,
+    clean_logit_diff: float = clean_logit_diff,
+    flipped_logit_diff: float = flipped_logit_diff,
+) -> float:
+    '''
+    Calibrated so that the value is:
+    0 is clean -1 is destroyed
+    '''
+    patched_logit_diff = logits_to_ave_logit_diff(logits, answer_tokens)
+    return ((patched_logit_diff - clean_logit_diff) / (clean_logit_diff - flipped_logit_diff)).item()
+
+
+
+#%%
 
 # Patching from attention head -> final residual stream value
 
@@ -114,8 +130,6 @@ results = path_patch(
     verbose=True,
 )
 
-results
-
 # %%
 
 imshow(
@@ -125,7 +139,6 @@ imshow(
     border=True,
     width=600,
     margin={"r": 100, "l": 100},
-    zmin=0.80, zmax=1.00
 )
 #%%
 
@@ -136,8 +149,8 @@ results = path_patch(
     orig_input=flipped_tokens,
     new_input=clean_tokens,
     sender_nodes=IterNode(["resid_pre", "attn_out", "mlp_out"], seq_pos="each"),
-    receiver_nodes=Node("resid_post", 35),
-    patching_metric=greater_than_metric_noising,
+    receiver_nodes=Node("resid_post", 27),
+    patching_metric=greater_than_metric_denoising,
     direct_includes_mlps=False, # gives similar results to direct_includes_mlps=True
     verbose=True,
 )
@@ -163,10 +176,11 @@ imshow(
     margin={"r": 100, "l": 100},
     border=True,
 )
+
 # %%
 # Patching head to head
 
-SENDER_HEADS= [(0, 4),(0, 3),(0, 1),(24, 7),(0, 10),(0, 12),(24, 5),(19, 0),(20,12),(0,13),(19,11),(34,14),(4,12),(9,9),(19,2),(28,2),(28,5)]
+SENDER_HEADS= [20,12]
 RECEIVER_HEADS = SENDER_HEADS
 
 head_patch_res = []
@@ -195,4 +209,38 @@ head_patch_res = sorted(head_patch_res, key=lambda x: x['score'], reverse=True)
 for item in head_patch_res:
     print(f"Edge {item['sender']} -> {item['receiver']}: {item['score']:.5f}")
 
+# %%
+
+#%% Patching head to neurons
+
+# Testing edge between L20H12 and top 10 Layer 23 neurons
+
+SENDER_HEADS = [(5, 0)]
+RECEIVER_NEURONS = [(23, 106), (23, 912), (23, 1448), (23, 963), (23, 659), (23, 687), (23, 875), (23,1073), (23,558), (23, 1349)]
+
+
+results = path_patch(
+    model,
+    orig_input=flipped_tokens,
+    new_input=clean_tokens,
+    sender_nodes=Node("z", layer=19, head=0),
+    receiver_nodes=[Node("pre", layer, head=head) for layer, head in RECEIVER_NEURONS],
+    patching_metric=greater_than_metric_noising,
+    verbose=True,
+)
+
+results
+
+#%%
+
+imshow(
+    results['z'],
+    title="Direct effect on logit diff (patch from head output -> final resid)",
+    labels={"x": "Head", "y": "Layer", "color": "Logit diff variation"},
+    border=True,
+    width=600,
+    margin={"r": 100, "l": 100},
+    zmin=0.80, zmax=1.00
+)
+#
 # %%

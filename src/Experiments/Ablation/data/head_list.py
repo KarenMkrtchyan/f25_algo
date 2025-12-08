@@ -45,3 +45,27 @@ head_list = [
     "head" : 14
      },
 ]
+
+head_list_qwen17 = [
+    {"layer": 7,
+     "head": 0,
+    },
+    {"layer": 13,
+     "head": 11,
+    },
+    {"layer": 15,
+     "head": 9,
+    },
+    {"layer": 17,
+     "head": 1,
+    },
+    {"layer": 17,
+     "head": 11,
+    },
+    {"layer": 19,
+     "head": 6,
+    },
+    {"layer": 24,
+     "head": 9,
+    },
+]

@@ -10,20 +10,20 @@ from transformer_lens import HookedTransformer
 
 # %%
 
-model = HookedTransformer.from_pretrained("meta-llama/Llama-3.2-3B")
+model = HookedTransformer.from_pretrained("Qwen/Qwen3-1.7b")
 
 #%%
 prompts = [
   {
     "clean_prompt": "Is 9432 > 8231? Answer: ",
     "corrupted_prompt": "Is 8231 > 9432? Answer: ",
-    "clean_label": " Yes",
-    "corrupted_label": " No"
+    "clean_label": "Yes",
+    "corrupted_label": "No"
   },
 ]
 
 # plot one heatmap per position
-patching_result = torch.load("results/patching_result_llama3b000.pt")
+patching_result = torch.load("results/patching_result_qwen1.7000.pt")
 prompt = prompts[0]["clean_prompt"]
 
 #%%
@@ -31,7 +31,6 @@ tokens = model.to_str_tokens(prompt)
 print(tokens)
 
 #%%
-
 n_positions = patching_result.shape[1]
 
 fig = make_subplots(
@@ -47,7 +46,6 @@ for pos in range(n_positions):
         go.Heatmap(
             z=heatmap_data,
             colorscale='RdBu_r',
-            zmid=0,
             showscale=(pos == n_positions - 1)
         ),
         row=1, col=pos+1
@@ -61,7 +59,7 @@ fig.update_layout(
 results_dir = "results"
 
 fig.write_image(
-    os.path.join(results_dir, "heatmap_by_position_last_prompt.png"),
+    os.path.join(results_dir, "heatmap_by_position_last_prompt_qwen.png"),
     width=200 * n_positions,
     height=400,
 )
