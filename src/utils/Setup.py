@@ -31,7 +31,7 @@ from transformer_lens import (
     utils,
 )
 from transformer_lens.hook_points import HookPoint
-from device_utils import get_device
+from .device_utils import get_device
 
 device = get_device()
 

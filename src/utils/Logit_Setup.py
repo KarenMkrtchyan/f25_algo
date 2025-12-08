@@ -1,6 +1,6 @@
 from functools import partial
 from typing import List, Optional, Union
-from device_utils import get_device
+from .device_utils import get_device
 
 import einops
 import numpy as np
