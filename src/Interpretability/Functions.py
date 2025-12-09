@@ -1488,4 +1488,63 @@ def plot_neuron_scores(neuron_scores, layer, output_path):
 
     plt.savefig(output_path, bbox_inches='tight', dpi=200)
     plt.show()
+
+def plot_component_scores(patch_full, model, output_path=None, label="Component Importance"):
+    """
+    Visualize causal contribution from transformer components:
+    X-axis: Embedding, Attn0, MLP0, Attn1, MLP1, ..., AttnN, MLP(N-1)
+    Y-axis: Normalized rescue score (logit difference effect)
+    
+    patch_full: output from compute_act_patching (shape: [batches, layers, components])
+    """
+
+    assert patch_full.ndim == 3, f"Expected 3D tensor [batches, layers, components], got {patch_full.shape}"
+
+    print("📊 patch_full raw shape:", patch_full.shape)
+
+    # 1️⃣ Average over batches
+    patch_avg = patch_full.mean(dim=0)  # → [layers, components]
+    print("📌 After averaging over batches:", patch_avg.shape)
+
+    n_layers = model.cfg.n_layers
+    n_components = patch_avg.shape[1]
+
+    # 2️⃣ We only plot:
+    # index 1 = attention output
+    # index 4 = mlp output
+    # (Verified for Pythia architecture)
+    assert n_components > 4, "Component count too small — full patching data unexpected."
+
+    attn_scores = patch_avg[:, 1]
+    mlp_scores = patch_avg[:, 4]
+
+    # 3️⃣ Construct flattened sequential plot scores
+    flat_scores = [0.0]  # Embedding receives no patch → 0 cause
+    labels = ["Emb"]
+
+    for layer in range(n_layers):
+        labels.append(f"Attn{layer}")
+        flat_scores.append(attn_scores[layer].item())
+
+        labels.append(f"MLP{layer}")
+        flat_scores.append(mlp_scores[layer].item())
+
+    x = np.arange(len(flat_scores))
+
+    # 4️⃣ Plot
+    plt.figure(figsize=(18, 6))
+    plt.plot(x, flat_scores, '-o', markersize=7, linewidth=2,
+             label=label)
+
+    plt.xticks(x, labels, rotation=75, ha='right')
+    plt.ylabel("Logit Difference")
+    plt.xlabel("Model Component")
+    plt.title("Average Causal Contribution of Transformer Components")
+    plt.grid(True, linestyle='--', alpha=0.4)
+
+    if output_path:
+        plt.savefig(output_path, bbox_inches='tight', dpi=200)
+        print(f"💾 Saved component-level plot to {output_path}")
+
+    plt.show()
     

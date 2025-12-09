@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from utils.model_config import load_model
 from utils.device_utils import get_device
-from Interpretability import build_dataset, compute_act_patching, get_logit_diff, paper_plot, build_numeric_batches, compute_baselines, numeric_metric, plot_all_patch_effects_paper, save_sorted_head_importance
+from Interpretability import build_dataset, compute_act_patching, get_logit_diff, paper_plot, build_numeric_batches, compute_baselines, numeric_metric, plot_all_patch_effects_paper, save_sorted_head_importance, plot_component_scores
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
@@ -49,6 +49,7 @@ patch_full = compute_act_patching(
 
 patch_attn = patch_full[1]
 patch_mlp  = patch_full[2]
+print(patch_full.shape)
 
 print("Activation patching complete!")
 print("\n")
@@ -60,6 +61,7 @@ digit_folder = os.path.join(display_folder, "4digit")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
 csv_path = os.path.join(output_folder, "head_importance.csv")
+component_plot_path = os.path.join(output_folder, "component_relevance.png")
 
 save_sorted_head_importance(patch_heads, csv_path)
 plot_all_patch_effects_paper(
@@ -70,3 +72,4 @@ plot_all_patch_effects_paper(
     patch_heads,
     output_folder
 )
+plot_component_scores(patch_full, model, component_plot_path)
