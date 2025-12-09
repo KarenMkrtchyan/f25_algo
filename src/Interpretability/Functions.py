@@ -1430,3 +1430,62 @@ def save_sorted_head_importance(patch_results, output_path="head_importance.csv"
     print(f"Saved head ranking to {output_path}")
 
     return df_sorted
+
+def patch_mlp_neurons(model, layer, batches_base, batches_src, 
+                       numeric_metric, CLEAN_BASELINE, CORRUPTED_BASELINE, 
+                       yes_id, no_id):
+
+    n_neurons = model.cfg.d_mlp 
+    neuron_scores = []
+
+    # Iterate over neurons in this layer
+    for neuron_idx in range(n_neurons):
+        scores = []
+
+        # Patch each batch individually then mean-aggregate later
+        for bb, sb in zip(batches_base, batches_src):
+
+            # Get clean activation cache
+            _, clean_cache = model.run_with_cache(bb)
+
+            def hook(activations, hook):
+                activations[:, -1, neuron_idx] = clean_cache[hook.name][:, -1, neuron_idx]
+                return activations
+
+            # Patch only neuron_idx at this layer’s mlp.hook_post
+            logits = model.run_with_hooks(
+                sb,
+                fwd_hooks=[(f"blocks.{layer}.mlp.hook_post", hook)]
+            )
+
+            score = numeric_metric(logits, yes_id, no_id, CLEAN_BASELINE, CORRUPTED_BASELINE)
+            scores.append(score.item())
+
+        neuron_scores.append(np.mean(scores))
+
+    return t.tensor(neuron_scores)
+
+def save_sorted_neuron_importance(neuron_scores, layer, output_csv="neuron_importance_layer.csv"):
+    data = [(f"Layer{layer}Neuron{i}", neuron_scores[i].item()) 
+            for i in range(len(neuron_scores))]
+    df = pd.DataFrame(data, columns=["Neuron", "LogitDiff"])
+    df_sorted = df.sort_values(by="LogitDiff", ascending=False)
+    df_sorted.to_csv(output_csv, index=False)
+    print(f"Saved neuron rankings for L{layer} to {output_csv}")
+    return df_sorted
+
+def plot_neuron_scores(neuron_scores, layer, output_path):
+
+    plt.figure(figsize=(14, 4))
+    x = list(range(len(neuron_scores)))
+    y = neuron_scores.cpu().numpy()
+
+    plt.bar(x, y, width=1.0)
+    plt.xlabel("Neuron")
+    plt.ylabel("Logit Difference")
+    plt.title(f"Neuron Importance in Layer {layer}")
+    plt.grid(True, linestyle="--", alpha=0.4)
+
+    plt.savefig(output_path, bbox_inches='tight', dpi=200)
+    plt.show()
+    

@@ -51,7 +51,10 @@ from .Functions import (
     compute_baselines,
     numeric_metric,
     plot_all_patch_effects_paper,
-    save_sorted_head_importance
+    save_sorted_head_importance,
+    patch_mlp_neurons,
+    save_sorted_neuron_importance,
+    plot_neuron_scores
 )
 
 # Version information

@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from utils.model_config import load_model
 from utils.device_utils import get_device
-from Interpretability import build_dataset, compute_act_patching, get_logit_diff, paper_plot, build_numeric_batches, compute_baselines, numeric_metric, plot_all_patch_effects_paper, save_sorted_head_importance
+from Interpretability import build_dataset, build_numeric_batches, compute_baselines, patch_mlp_neurons, save_sorted_neuron_importance, plot_neuron_scores, numeric_metric
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
@@ -18,6 +18,7 @@ dataset = build_dataset(n=10, low=1000, high=9999)
 model_name = "pythia-70m"
 model = load_model(model_name)
 device = get_device()
+layer = 5
 
 yes_id = model.to_single_token(" Yes")
 no_id = model.to_single_token(" No")
@@ -34,39 +35,28 @@ print("Baselines computed: ")
 print("Clean:", CLEAN_BASELINE.item(), "Corrupted:", CORRUPTED_BASELINE.item())
 print("\n")
 
-patch_resid = compute_act_patching(
-    model, numeric_metric, yes_id, no_id, CLEAN_BASELINE, CORRUPTED_BASELINE, "resid_streams",
-    batches_base, batches_src, num_batches
-)
-patch_heads = compute_act_patching(
-    model, numeric_metric, yes_id, no_id, CLEAN_BASELINE, CORRUPTED_BASELINE, "heads_last_pos",
-    batches_base, batches_src, num_batches
-)
-patch_full = compute_act_patching(
-    model, numeric_metric, yes_id, no_id, CLEAN_BASELINE, CORRUPTED_BASELINE, "full",
-    batches_base, batches_src, num_batches
+scores = patch_mlp_neurons(
+    model=model,
+    layer=layer,
+    batches_base=batches_base,
+    batches_src=batches_src,
+    numeric_metric=numeric_metric,
+    CLEAN_BASELINE=CLEAN_BASELINE,
+    CORRUPTED_BASELINE=CORRUPTED_BASELINE,
+    yes_id=yes_id,
+    no_id=no_id
 )
 
-patch_attn = patch_full[1]
-patch_mlp  = patch_full[2]
-
-print("Activation patching complete!")
+print("Neuron patching complete")
 print("\n")
 
-tokens_str = model.to_str_tokens(model.to_tokens("Is 1234 > 5678? Answer:"))
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "4digit")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
-csv_path = os.path.join(output_folder, "head_importance.csv")
+csv_path = os.path.join(output_folder, f"Layer{layer}_neurons.csv")
+plot_path = os.path.join(output_folder, f"Layer{layer}_neurons.png")
 
-save_sorted_head_importance(patch_heads, csv_path)
-plot_all_patch_effects_paper(
-    model,
-    patch_resid,
-    patch_attn,
-    patch_mlp,
-    patch_heads,
-    output_folder
-)
+df = save_sorted_neuron_importance(scores, layer, csv_path)
+plot_neuron_scores(scores, layer, plot_path)
