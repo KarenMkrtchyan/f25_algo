@@ -50,7 +50,8 @@ from .Functions import (
     build_numeric_batches,
     compute_baselines,
     numeric_metric,
-    plot_all_patch_effects_paper
+    plot_all_patch_effects_paper,
+    save_sorted_head_importance
 )
 
 # Version information

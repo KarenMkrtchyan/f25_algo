@@ -67,10 +67,10 @@ def build_remote_setup_command() -> str:
     # Upgrade pip first
     ~/f25_algo/venv/bin/pip install --upgrade pip
 
-    # Install PyTorch CUDA wheels
-    ~/f25_algo/venv/bin/pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+    # ✅ Install CUDA builds for GPU
+    ~/f25_algo/venv/bin/pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
 
-    # Install safe subset of your requirements
+    # Core deps
     ~/f25_algo/venv/bin/pip install \
         transformer_lens \
         einops \
@@ -81,8 +81,9 @@ def build_remote_setup_command() -> str:
         circuitsvis \
         plotly
 
-    # Install neel_plotly from GitHub (not PyPI)
+    # neel-plotly from GitHub
     ~/f25_algo/venv/bin/pip install "git+https://github.com/neelnanda-io/neel-plotly.git"
+
 
     echo "▶️ Running experiment..."
     {REMOTE_PYTHON} {REMOTE_SCRIPT}

@@ -946,7 +946,7 @@ def build_dataset(n=2000, seed=42, low=1, high=100000):
     data = []
     for _ in range(n):
         a = int(rng.integers(low, high))
-        b = int(rng.integers(low, high))
+        b = int(rng.integers(low, a))
         clean = make_prompt(a, b)
         corrupt = make_prompt(b, a)
         label = int(a > b)
@@ -1197,12 +1197,13 @@ def paper_plot(fig, tickangle=60):
 
 def compute_act_patching(model: HookedTransformer,
                          metric: callable,
+                         yes_id: int,
+                         no_id: int,
                          CLEAN_BASELINE: float,
                          CORRUPTED_BASELINE: float,
                          patching_type: str,
                          batches_base_tokens: list,
                          batches_src_tokens: list,
-                         batches_answer_token_indices: list,
                          batches: int):
     # resid_streams
     # heads_all_pos : attn heads all positions at the same time
@@ -1214,9 +1215,8 @@ def compute_act_patching(model: HookedTransformer,
         src_tokens = batches_src_tokens[batch]
         base_logits, base_cache = model.run_with_cache(base_tokens)
         src_logits, _ = model.run_with_cache(src_tokens)
-        answer_token_indices = batches_answer_token_indices[batch]
         
-        metric_fn = partial(metric, answer_token_indices=answer_token_indices, CLEAN_BASELINE=CLEAN_BASELINE, CORRUPTED_BASELINE=CORRUPTED_BASELINE)
+        metric_fn = partial(metric, yes_id=yes_id, no_id=no_id, CLEAN_BASELINE=CLEAN_BASELINE, CORRUPTED_BASELINE=CORRUPTED_BASELINE)
         if patching_type=='resid_streams':
             # resid_pre_act_patch_results -> [n_layers, pos]
             patch_results = patching.get_act_patch_resid_pre(model, src_tokens, base_cache, metric_fn)
@@ -1244,10 +1244,8 @@ def build_numeric_batches(model, dataset, yes_id, no_id, device, batch_size=32):
         base_toks.append(model.to_tokens(clean, prepend_bos=True))
         src_toks.append(model.to_tokens(corrupt, prepend_bos=True))
         
-        correct = yes_id if label == 1 else no_id
-        incorrect = no_id if label == 1 else yes_id
-        correct_ids.append(correct)
-        wrong_ids.append(incorrect)
+        correct_ids.append(yes_id)
+        wrong_ids.append(no_id)
 
     max_len = max(seq.shape[-1] for seq in base_toks + src_toks)
 
@@ -1280,22 +1278,48 @@ def build_numeric_batches(model, dataset, yes_id, no_id, device, batch_size=32):
 
     return batches_base, batches_src, batches_ans
 
-def compute_baselines(model, batches_base, batches_src, batches_ans):
+def compute_baselines(model, batches_base, batches_src, yes_id, no_id):
+    """
+    Compute baseline logit diff values:
+    - Clean baseline: model confidence for Yes on clean prompts.
+    - Corrupt baseline: model confidence for Yes on corrupt prompts.
+    """
+
     base_diffs, src_diffs = [], []
-    for bb, sb, ans in zip(batches_base, batches_src, batches_ans):
+
+    for bb, sb in zip(batches_base, batches_src):
         base_logits = model(bb)
         src_logits = model(sb)
-        base_diffs.append(get_logit_diff(base_logits, ans, mean=False))
-        src_diffs.append(get_logit_diff(src_logits, ans, mean=False))
+
+        # Extract logits for Yes and No at the last position
+        base_yes = base_logits[:, -1, yes_id]
+        base_no  = base_logits[:, -1, no_id]
+        src_yes  = src_logits[:, -1, yes_id]
+        src_no   = src_logits[:, -1, no_id]
+
+        # Logit difference: Yes - No
+        base_diffs.append(base_yes - base_no)
+        src_diffs.append(src_yes - src_no)
 
     CLEAN_BASELINE = t.cat(base_diffs).mean()
     CORRUPTED_BASELINE = t.cat(src_diffs).mean()
     return CLEAN_BASELINE, CORRUPTED_BASELINE
 
-def numeric_metric(logits, answer_token_indices, CLEAN_BASELINE, CORRUPTED_BASELINE):
-    ld = get_logit_diff(logits, answer_token_indices, mean=False)
+def numeric_metric(logits, yes_id, no_id, CLEAN_BASELINE, CORRUPTED_BASELINE):
+    """
+    Normalized metric for activation patching:
+    - 1.0 → full rescue (equal to clean baseline)
+    - 0.0 → no rescue (equal to corrupt baseline)
+    - < 0 → anti-causal (worse than corrupt baseline)
+    """
+
+    yes_logits = logits[:, -1, yes_id]
+    no_logits  = logits[:, -1, no_id]
+    ld = yes_logits - no_logits  # logit diff
+
     normalized = (ld - CORRUPTED_BASELINE) / (CLEAN_BASELINE - CORRUPTED_BASELINE)
     return normalized.mean()
+
 
 def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patch_heads, output_folder):
     """
@@ -1379,3 +1403,30 @@ def head_mean_ablation_hook_by_pos(
     z[:, pos_to_ablate, head_index_to_ablate, :] = baseline
 
     return z
+
+def save_sorted_head_importance(patch_results, output_path="head_importance.csv"):
+    """
+    Takes patch_results from heads_last_pos activation patching:
+    - patch_results shape: [n_layers, n_heads]
+    - Writes a CSV sorted by importance (logit diff improvement)
+    """
+
+    n_layers, n_heads = patch_results.shape
+    data = []
+
+    # Gather head name + score pairs
+    for layer in range(n_layers):
+        for head in range(n_heads):
+            score = patch_results[layer, head].item()
+            head_name = f"Layer{layer}Head{head}"
+            data.append((head_name, score))
+
+    # Create DataFrame and sort by score descending
+    df = pd.DataFrame(data, columns=["Head", "LogitDiff"])
+    df_sorted = df.sort_values(by="LogitDiff", ascending=False)
+
+    # Save
+    df_sorted.to_csv(output_path, index=False)
+    print(f"Saved head ranking to {output_path}")
+
+    return df_sorted
