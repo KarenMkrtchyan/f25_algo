@@ -55,7 +55,8 @@ from .Functions import (
     patch_mlp_neurons,
     save_sorted_neuron_importance,
     plot_neuron_scores,
-    plot_component_scores
+    plot_component_scores,
+    plot_head_to_neuron_dot_products
 )
 
 # Version information

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import pyarrow as pa
+import seaborn as sns
 import pyarrow.parquet as pq
 from tqdm import tqdm
 from neel_plotly import imshow, line, scatter
@@ -1548,3 +1549,114 @@ def plot_component_scores(patch_full, model, output_path=None, label="Component 
 
     plt.show()
     
+def get_head_output(cache, model, layer, head, pos):
+    d_head = model.cfg.d_head
+    n_heads = model.cfg.n_heads
+
+    # Best: hook_result is head-separated value output pre-W_O
+    key = f"blocks.{layer}.attn.hook_result"
+    if key in cache:
+        res = cache[key]
+        if res.ndim == 4 and res.shape[2] == n_heads:
+            return res[:, pos, head, :]   # [batch, d_head]
+
+    # Backup: GPT-2 unmixed (already [batch, seq, head, d_head])
+    key = f"blocks.{layer}.attn.h_out"
+    if key in cache:
+        return cache[key][:, pos, head, :]
+
+    # Last resort: mixed output, unmix via W_O
+    for key in (
+        f"blocks.{layer}.hook_attn_out",
+        f"blocks.{layer}.attn.hook_attn_out",
+        f"blocks.{layer}.attn.out"
+    ):
+        if key in cache:
+            attn_out = cache[key][:, pos, :]  # [batch, d_model]
+            W_O = model.blocks[layer].attn.W_O  # [d_model, d_head*n_heads]
+            start = head * d_head
+            end = (head + 1) * d_head
+            return attn_out @ W_O[:, start:end]
+
+    raise KeyError(f"No attention value output found for layer {layer}.")
+
+def plot_head_to_neuron_dot_products(
+    model,
+    batches_base,
+    batches_src,
+    Lh, #attention layer
+    H,  #attention head
+    Lm, #MLP layer
+    N,  #Neuron index
+    title=None,
+    save_path=None
+):
+    """
+    Computes dot(head_out_last_pos, MLP_neuron_w_out) and plots group boxplots
+    comparing clean vs corrupt datasets.
+    """
+
+    # Lists storing dot products across full dataset
+    clean_values = []
+    corrupt_values = []
+    
+    # Output weights of the MLP neuron
+    W_out_param = model.blocks[Lm].mlp.W_out
+
+    # Case A: W_out is a Parameter (e.g. Pythia)
+    if isinstance(W_out_param, t.nn.Parameter) or isinstance(W_out_param, t.Tensor):
+        W = W_out_param
+
+    # Case B: W_out is a Linear module (e.g. GPT-2)
+    elif hasattr(W_out_param, "weight"):
+        W = W_out_param.weight
+    else:
+        raise ValueError(f"Cannot find W_out weights. Got type: {type(W_out_param)}")
+
+    # Now handle either shape [d_model, d_mlp] or [d_mlp, d_model]
+    if W.shape[0] == model.cfg.d_mlp:  # Pythia style: [2048, 512]
+        neuron_w_out = W[N, :]         # correct neuron row
+    elif W.shape[1] == model.cfg.d_mlp:  # GPT-2 style: [512, 2048]
+        neuron_w_out = W[:, N]
+    else:
+        raise ValueError(f"Unexpected W_out shape: {W.shape}")
+    
+    last_pos = -1  # final token
+    
+    for bb, sb in zip(batches_base, batches_src):
+        # Forward passes with cache
+        _, clean_cache = model.run_with_cache(bb)
+        _, corrupt_cache = model.run_with_cache(sb)
+
+        # Head output of chosen head
+        clean_head = get_head_output(clean_cache, model, Lh, H, last_pos)
+        corrupt_head = get_head_output(corrupt_cache, model, Lh, H, last_pos)
+
+        # Dot products
+        clean_values.extend((clean_head @ neuron_w_out).detach().cpu().tolist())
+        corrupt_values.extend((corrupt_head @ neuron_w_out).detach().cpu().tolist())
+    
+    # Build DataFrame for seaborn
+    df = pd.DataFrame({
+        "Value": clean_values + corrupt_values,
+        "Condition": ["Clean (a>b → Yes)"] * len(clean_values) +
+                     ["Corrupt (b>a → No)"] * len(corrupt_values)
+    })
+
+    # Plot
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(data=df, x="Condition", y="Value", palette=["#88c999", "#c17c74"])
+    sns.stripplot(data=df, x="Condition", y="Value", color="black", alpha=0.2)
+
+    plt.ylabel(f"Attn(L{Lh},H{H}) · W_out(L{Lm},N{N})")
+    plt.xlabel("Condition")
+    if title is not None:
+        plt.title(title)
+    plt.grid(axis="y", linestyle="--", alpha=0.4)
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Saved plot to {save_path}")
+    plt.show()
+
+    return df
