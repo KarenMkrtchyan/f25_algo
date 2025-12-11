@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import pyarrow as pa
 import seaborn as sns
 import pyarrow.parquet as pq
+from sklearn.decomposition import PCA
 from tqdm import tqdm
 from neel_plotly import imshow, line, scatter
 import plotly.subplots as sp
@@ -1657,6 +1658,92 @@ def plot_head_to_neuron_dot_products(
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Saved plot to {save_path}")
+    plt.show()
+
+    return df
+
+def plot_head_PCA(
+    model,
+    batches_base,
+    batches_src,
+    layer: int,
+    head: int,
+    title=None,
+    save_path=None,
+    max_points=600,
+):
+    """
+    Performs PCA on the output of (layer, head) at the final position.
+    Clean prompts = class 1 (a>b)
+    Corrupt prompts = class 0 (b>a)
+    """
+
+    clean_outputs = []
+    corrupt_outputs = []
+
+    last_pos = -1
+
+    # Loop through batches and extract head output at last token
+    for bb, sb in zip(batches_base, batches_src):
+        # Forward passes with cache
+        _, clean_cache = model.run_with_cache(bb)
+        _, corrupt_cache = model.run_with_cache(sb)
+
+        # Head output of chosen head
+        clean_head = get_head_output(clean_cache, model, layer, head, last_pos)
+        corrupt_head = get_head_output(corrupt_cache, model, layer, head, last_pos)
+
+        clean_outputs.append(clean_head.detach().cpu())
+        corrupt_outputs.append(corrupt_head.detach().cpu())
+
+    # Combine
+    clean_mat = t.cat(clean_outputs, dim=0).numpy()
+    corrupt_mat = t.cat(corrupt_outputs, dim=0).numpy()
+
+    # Optional: limit number of points for visualization
+    if clean_mat.shape[0] > max_points:
+        clean_mat = clean_mat[:max_points]
+        corrupt_mat = corrupt_mat[:max_points]
+
+    # Build labels
+    X = np.vstack([clean_mat, corrupt_mat])
+    y = np.array([1]*clean_mat.shape[0] + [0]*corrupt_mat.shape[0])
+
+    # PCA
+    pca = PCA(n_components=2)
+    pcs = pca.fit_transform(X)
+
+    pc1, pc2 = pcs[:, 0], pcs[:, 1]
+
+    # Prepare DataFrame for seaborn
+    import pandas as pd
+    df = pd.DataFrame({
+        "PC1": pc1,
+        "PC2": pc2,
+        "Class": np.where(y == 1, "Greater (a>b)", "Less (b>a)")
+    })
+
+    # Plot
+    plt.figure(figsize=(8, 6))
+    sns.scatterplot(
+        data=df,
+        x="PC1",
+        y="PC2",
+        hue="Class",
+        palette={"Greater (a>b)": "blue", "Less (b>a)": "red"},
+        s=40,
+        alpha=0.8
+    )
+
+    plt.title(title or f"PCA of Layer {layer}, Head {head} Outputs")
+    plt.xlabel("PC1")
+    plt.ylabel("PC2")
+    plt.grid(True, linestyle="--", alpha=0.3)
+    plt.legend()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
     plt.show()
 
     return df

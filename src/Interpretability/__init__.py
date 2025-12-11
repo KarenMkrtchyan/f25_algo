@@ -56,7 +56,8 @@ from .Functions import (
     save_sorted_neuron_importance,
     plot_neuron_scores,
     plot_component_scores,
-    plot_head_to_neuron_dot_products
+    plot_head_to_neuron_dot_products,
+    plot_head_PCA
 )
 
 # Version information
