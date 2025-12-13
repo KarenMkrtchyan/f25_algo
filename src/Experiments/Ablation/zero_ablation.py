@@ -5,7 +5,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from Interpretability import head_zero_ablation_hook_by_pos
 import torch
-from test_suite.eval import run_benchmark
+from test_suite.eval_logits import run_benchmark_logits
 
 from functools import partial
 from transformer_lens import HookedTransformer, utils
@@ -16,6 +16,7 @@ torch.cuda.empty_cache()
 model = HookedTransformer.from_pretrained("Qwen/Qwen2.5-3b")
 
 #%%
+
 task = "greater_than_4_digit"
 
 head_list=[
@@ -24,25 +25,21 @@ head_list=[
         "head": 12,
         "pos": 11,
     },
-
     {
         "layer": 19,
         "head": 0,
         "pos": 8,
     },
-
     {
         "layer": 19,
         "head": 0,
         "pos": 9,
     },
-
     {
         "layer": 19,
         "head": 0,
         "pos": 11,
     },
-
     {
         "layer": 9,
         "head": 9,
@@ -72,7 +69,7 @@ for head in head_list:
 
 with model.hooks(fwd_hooks=forward_hooks):
     #ablated_logits = model(tokens, return_type="logits")
-    df = run_benchmark(
+    df = run_benchmark_logits(
         model=model,
         task_name=task,
         num_fewshot=0,
