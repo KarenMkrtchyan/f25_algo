@@ -29,11 +29,11 @@ prompts = [p["clean_prompt"] for p in prompt_list]
 labels = [p["clean_label"] for p in prompt_list]
 
 # Define the answers for each prompt, in the form (correct, incorrect)
-answers = [("Yes", "No") if label == "Yes" else ("No", "Yes") for label in labels]
+answers = [(" yes", " NO") if label == " yes" else (" NO", " yes") for label in labels]
 
 # Define the answer tokens (same shape as the answers)
-yes_id = model.to_single_token("Yes")
-no_id  = model.to_single_token("No")
+yes_id = model.to_single_token(" yes")
+no_id  = model.to_single_token(" NO")
 
 answer_tokens = []
 for label in labels:

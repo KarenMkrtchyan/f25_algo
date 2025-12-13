@@ -10,20 +10,20 @@ from transformer_lens import HookedTransformer
 
 # %%
 
-model = HookedTransformer.from_pretrained("Qwen/Qwen3-1.7b")
+model = HookedTransformer.from_pretrained("Qwen/Qwen2.5-3b")
 
 #%%
 prompts = [
   {
-    "clean_prompt": "Is 9432 > 8231? Answer: ",
-    "corrupted_prompt": "Is 8231 > 9432? Answer: ",
-    "clean_label": "Yes",
-    "corrupted_label": "No"
+    "clean_prompt": "Is 9432 > 8231? Answer:",
+    "corrupted_prompt": "Is 8231 > 9432? Answer:",
+    "clean_label": " yes",
+    "corrupted_label": " NO"
   },
 ]
 
 # plot one heatmap per position
-patching_result = torch.load("results/patching_result_qwen1.7000.pt")
+patching_result = torch.load("results/patching_result_qwen2.5test000.pt")
 prompt = prompts[0]["clean_prompt"]
 
 #%%

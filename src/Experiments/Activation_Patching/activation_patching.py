@@ -13,12 +13,10 @@ t.set_grad_enabled(False)
 
 results_dir = "results"
 os.makedirs(results_dir, exist_ok=True)
-
-#%%
 from transformer_lens.patching import get_act_patch_attn_head_out_by_pos
 from transformer_lens.HookedTransformer import HookedTransformer
 #%%
-model = HookedTransformer.from_pretrained("Qwen/Qwen3-1.7b")
+model = HookedTransformer.from_pretrained("Qwen/Qwen2.5-3b")
 
 n_layers = model.cfg.n_layers
 n_heads = model.cfg.n_heads
@@ -27,10 +25,10 @@ head_counts = t.zeros(n_layers, n_heads, dtype=t.long)
 
 prompts = [
   {
-    "clean_prompt": "Is 9432 > 8231? Answer: ",
-    "corrupted_prompt": "Is 8231 > 9432? Answer: ",
-    "clean_label": "Yes",
-    "corrupted_label": "No"
+    "clean_prompt": "Is 9432 > 8231? Answer:",
+    "corrupted_prompt": "Is 8231 > 9432? Answer:",
+    "clean_label": " yes",
+    "corrupted_label": " NO"
   },
 ]
 #%% 
@@ -67,7 +65,7 @@ for i, item in enumerate(prompts):
         patching_metric=logit_diff_metric
     )
     
-    t.save(tensor_result.cpu(), os.path.join(results_dir, f"patching_result_qwen1.7{i:03d}.pt"))
+    t.save(tensor_result.cpu(), os.path.join(results_dir, f"patching_result_qwen2.5test{i:03d}.pt"))
 
     std_threshold = 5.0
     n_layers, n_positions, n_heads = tensor_result.shape

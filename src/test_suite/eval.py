@@ -106,3 +106,6 @@ def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_he
 
     print(f"Results saved in {file_name}")
     return df
+
+
+#%%
