@@ -39,6 +39,7 @@ from .Functions import (
     get_last_pos,
     load_or_generate_parquet,
     head_mean_ablation_hook_by_pos,
+    head_zero_ablation_hook_by_pos,
     run_patching,
     plot_attention_head_heatmap,
     plot_mlp_patch_bar,
@@ -82,5 +83,6 @@ __all__ = [
     "visualize_ablation",
     "run_model_with_induction_analysis",
     "run_model_with_ablation_analysis",
-    "head_mean_ablation_hook_by_pos"
+    "head_mean_ablation_hook_by_pos",
+    "head_zero_ablation_hook_by_pos",
 ]
