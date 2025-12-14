@@ -1,50 +1,26 @@
-#%%
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+import pandas as pd
+from transformer_lens.HookedTransformer import HookedTransformer
 
-from Interpretability import head_zero_ablation_hook_by_pos
-import torch
-from test_suite.eval_logits import run_benchmark_logits
+def quick_logit_attribution(model, layers, yes_tok=" yes", no_tok=" NO"):
+    yes_id = model.to_single_token(yes_tok)
+    no_id = model.to_single_token(no_tok)
+    truth_dir = model.W_U[:, yes_id] - model.W_U[:, no_id]
+    
+    results = []
+    
+    for layer in layers:
+        W_out = model.blocks[layer].mlp.W_out
+        
+        # score for every neuron in this layer
+        scores = W_out @ truth_dir
+        
+        for i, score in enumerate(scores.detach().cpu().numpy()):
+            results.append({"layer": layer, "neuron": i, "score": score})
 
-from functools import partial
-from transformer_lens import HookedTransformer, utils
+    df = pd.DataFrame(results)
+    df["abs_score"] = df["score"].abs() 
+    return df.sort_values("abs_score", ascending=False).head(20)
 
-torch.set_grad_enabled(False)
-torch.cuda.empty_cache()
-
-model = HookedTransformer.from_pretrained(
-    "Qwen/Qwen2.5-3b",
-    center_unembed=True,
-    center_writing_weights=True,
-    fold_ln=True,
-    )
-
-#%%
-example_prompt = "Is 7912 > 1510? Answer:"
-example_answer = "NO"
-
-utils.test_prompt(example_prompt, example_answer, model, prepend_bos=True)
-#%%
-
-per_head_residual, labels = cache.stack_head_results(layer=-1, pos_slice=-1, return_labels=True)
-per_head_residual = einops.rearrange(
-    per_head_residual, 
-    "(layer head) ... -> layer head ...", 
-    layer=model.cfg.n_layers
-)
-
-# 2. Project onto your Yes-No direction
-per_head_logit_diffs = residual_stack_to_logit_diff(per_head_residual, cache)
-
-# 3. Plot
-imshow(
-    per_head_logit_diffs,
-    labels={"x": "Head", "y": "Layer"},
-    title="Logit Difference From Each Head",
-    width=600,
-)
-
-# %%
-
-
+model = HookedTransformer.from_pretrained("Qwen/Qwen2.5-3b")
+top_neurons = quick_logit_attribution(model, [23, 24, 30, 31, 32, 33, 34])
+print(top_neurons)
