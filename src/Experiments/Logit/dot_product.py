@@ -14,7 +14,8 @@ import transformer_lens.utils as utils
 
 dataset = build_dataset(n=10, low=1000, high=9999)
 
-model_name = "pythia-70m"
+#model_name = "pythia-70m"
+model_name = "qwen2.5-3b"
 model = load_model(model_name)
 model.set_use_attn_result(True)
 device = get_device()
@@ -23,6 +24,9 @@ yes_id = model.to_single_token(" Yes")
 no_id = model.to_single_token(" No")
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
+num_batches = len(batches_src)
+print(f"Batched into {num_batches} batches")
+print("\n")
 
 Attention_L = 4
 Attention_H = 6
