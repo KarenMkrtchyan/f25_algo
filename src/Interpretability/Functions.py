@@ -1405,6 +1405,26 @@ def head_mean_ablation_hook_by_pos(
     z[:, pos_to_ablate, head_index_to_ablate, :] = baseline
 
     return z
+def head_zero_ablation_hook_by_pos(
+    z: t.Tensor,
+    hook: HookPoint,
+    head_index_to_ablate: int,
+    pos_to_ablate: int,
+):
+    """
+    Hook function to replace a specific attention head at a specific position with its mean.
+    
+    Args:
+        z: Attention head outputs
+        hook: Hook point object
+        head_index_to_ablate: Index of head to ablate
+        pos_to_ablate: position to ablate
+    """
+    z[:, pos_to_ablate, head_index_to_ablate, :] = 0.0
+
+    return z
+
+
 
 def save_sorted_head_importance(patch_results, output_path="head_importance.csv"):
     """

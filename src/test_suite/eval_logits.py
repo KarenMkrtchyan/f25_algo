@@ -16,7 +16,7 @@ hf_api = os.getenv("HUGGINGFACE_KEY")
 login(token=hf_api)
 #%%
 
-def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_head="",ablated_pos=""):
+def run_benchmark_logits(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_head="",ablated_pos=""):
     torch.cuda.empty_cache()
     current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -52,6 +52,8 @@ def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_he
 
     samples = res.get("samples", {}).get(task_name, [])
 
+    logit_diffs = []
+
     for idx, sample in enumerate(samples):
         doc = sample.get("doc", {})
 
@@ -60,12 +62,19 @@ def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_he
         question_text = f"Is {a} > {b}? Answer:"
 
         filtered_resps = sample.get("filtered_resps", [])
+
+        logit_diff = 0.0
+        yes_logprob = 0.0
+        no_logprob = 0.0
+
         if len(filtered_resps) >= 2:
             yes_vals = filtered_resps[0]
             no_vals  = filtered_resps[1]
 
             yes_logprob, yes_chosen = yes_vals
             no_logprob,  no_chosen  = no_vals
+            
+            raw_diff = yes_logprob - no_logprob
 
             if yes_chosen:
                 model_chose = "Yes"
@@ -75,10 +84,14 @@ def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_he
                 model_chose = "Yes" if yes_logprob > no_logprob else "No"
         else:
             model_chose = "Unknown"
+            raw_diff = 0.0
 
         truth = (a > b)
         correct_answer = "Yes" if truth else "No"
         is_correct = (model_chose == correct_answer)
+
+        aligned_logit_diff = raw_diff if correct_answer == "Yes" else -raw_diff
+        logit_diffs.append(aligned_logit_diff)
 
         results.append({
             "model_name": model if isinstance(model, str) else "custom_model",
@@ -88,9 +101,18 @@ def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_he
             "correct_answer": correct_answer,
             "model_answer": model_chose,
             "is_correct": is_correct,
+            "yes_logprob": yes_logprob,
+            "no_logprob": no_logprob,
+            "logit_diff": aligned_logit_diff,
         })
 
     df = pd.DataFrame(results)
+
+    avg_logit_diff = sum(logit_diffs) / len(logit_diffs) if logit_diffs else 0
+
+    print(f"Run {run}")
+    print(f"Accuracy: {accuracy}")
+    print(f"Logit diff: {avg_logit_diff}")
 
     model_name_str = model if isinstance(model, str) else "custom_model"
     model_name_str = model_name_str.replace("/", "__")
@@ -106,6 +128,3 @@ def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_he
 
     print(f"Results saved in {file_name}")
     return df
-
-
-#%%
