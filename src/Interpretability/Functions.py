@@ -1747,3 +1747,157 @@ def plot_head_PCA(
     plt.show()
 
     return df
+
+import torch as t
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def plot_activation_steering(
+    model,
+    batches_base,
+    batches_src,
+    yes_id,
+    no_id,
+    layer,
+    head,
+    alpha,
+    device,
+    save_path,
+    pos=-1,
+):
+    """
+    Figure-7-style activation steering plot for numeric comparison,
+    using PC1 computed from attention head outputs via get_head_output.
+    """
+
+    # ------------------------------------------------------------
+    # 1. Collect head outputs and compute PC1
+    # ------------------------------------------------------------
+    acts = []
+
+    for batch in batches_base + batches_src:
+        batch = batch.to(device)
+        _, cache = model.run_with_cache(batch)
+
+        head_out = get_head_output(
+            cache=cache,
+            model=model,
+            layer=layer,
+            head=head,
+            pos=pos,
+        )  # [batch, d_head]
+
+        acts.append(head_out.detach().cpu())
+
+    X = t.cat(acts, dim=0)
+    X = X - X.mean(dim=0, keepdim=True)
+
+    # PCA via SVD
+    _, _, Vt = t.linalg.svd(X, full_matrices=False)
+    pc1 = Vt[0]
+    pc1 = pc1 / pc1.norm()
+    pc1 = pc1.to(device)
+
+    # ------------------------------------------------------------
+    # 2. Logit difference helper
+    # ------------------------------------------------------------
+    def logit_diff(logits):
+        yes = logits[:, -1, yes_id]
+        no  = logits[:, -1, no_id]
+        return (yes - no).detach().cpu()
+
+    # ------------------------------------------------------------
+    # 3. Steering hook (head-level, exact paper analogue)
+    # ------------------------------------------------------------
+    def make_steering_hook(pc1, alpha, head, pos, sign):
+        def hook(attn_result, hook):
+            attn_result[:, pos, head, :] += sign * alpha * pc1
+            return attn_result
+        return hook
+
+
+    # ------------------------------------------------------------
+    # 4. Run batches with / without steering
+    # ------------------------------------------------------------
+    def run_batches(batches, steer=False, sign=+1):
+        diffs = []
+
+        for batch in batches:
+            batch = batch.to(device)
+
+            if not steer:
+                logits = model(batch)
+            else:
+                with model.hooks(
+                    fwd_hooks=[
+                        (
+                            f"blocks.{layer}.attn.hook_result",
+                            make_steering_hook(pc1, alpha, head, pos, sign),
+                        )
+                    ]
+                ):
+                    logits = model(batch)
+
+            diffs.append(logit_diff(logits))
+
+        return t.cat(diffs).numpy()
+
+    # ------------------------------------------------------------
+    # 5. Collect statistics
+    # ------------------------------------------------------------
+    clean_before = run_batches(batches_base, steer=False)
+    clean_after  = run_batches(batches_base, steer=True, sign=-1)
+
+    corrupt_before = run_batches(batches_src, steer=False)
+    corrupt_after  = run_batches(batches_src, steer=True, sign=+1)
+
+    means = [
+        clean_before.mean(),
+        clean_after.mean(),
+        corrupt_before.mean(),
+        corrupt_after.mean(),
+    ]
+
+    sems = [
+        clean_before.std() / np.sqrt(len(clean_before)),
+        clean_after.std() / np.sqrt(len(clean_after)),
+        corrupt_before.std() / np.sqrt(len(corrupt_before)),
+        corrupt_after.std() / np.sqrt(len(corrupt_after)),
+    ]
+
+    # ------------------------------------------------------------
+    # 6. Plot (Figure-7 style)
+    # ------------------------------------------------------------
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
+
+    axes[0].bar(
+        ["Before steering", "After steering"],
+        means[:2],
+        yerr=sems[:2],
+        capsize=5,
+    )
+    axes[0].set_title("a > b")
+    axes[0].set_ylabel("Logit Difference (Yes − No)")
+
+    axes[1].bar(
+        ["Before steering", "After steering"],
+        means[2:],
+        yerr=sems[2:],
+        capsize=5,
+    )
+    axes[1].set_title("b > a")
+
+    fig.suptitle(
+        f"PCA steering at L{layer}H{head}, α={alpha}",
+        fontsize=12,
+    )
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    
+    plt.show()
+
+    return pc1
