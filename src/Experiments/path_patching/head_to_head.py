@@ -1,7 +1,7 @@
 #%%
 import sys
 import os
-from data.prompts import prompts as prompt_list
+from data.prompts import prompt_list
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from Interpretability.path_patching import path_patch, Node, IterNode, imshow, hist, path_patch_sender_to_receiver_logits
 from transformer_lens.HookedTransformer import HookedTransformer
@@ -13,22 +13,24 @@ from jaxtyping import Float, Int, Bool
 device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
-
 model = HookedTransformer.from_pretrained(
     "Qwen/Qwen2.5-3b",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
     refactor_factored_attn_matrices=False,
+    torch_dtype=t.bfloat16,
 )
 
 model.set_use_split_qkv_input(True)
 
 #%%
+
 prompts = [p["clean_prompt"] for p in prompt_list]
 labels = [p["clean_label"] for p in prompt_list]
 
 # Define the answers for each prompt, in the form (correct, incorrect)
+#%%
 answers = [(" yes", " NO") if label == " yes" else (" NO", " yes") for label in labels]
 
 # Define the answer tokens (same shape as the answers)
@@ -37,13 +39,23 @@ no_id  = model.to_single_token(" NO")
 
 answer_tokens = []
 for label in labels:
-    if label == "Yes":
+    if label == " yes":
         answer_tokens.append([yes_id, no_id])
     else:
         answer_tokens.append([no_id, yes_id])
 answer_tokens = t.tensor(answer_tokens, device=device)
 
 #%%
+
+def patching_filter(name):
+    if any(n in name for n in ["resid_pre", "attn_out", "mlp_out", "z"]):
+        return True
+
+    if "hook_q" in name and ".0." in name:
+        return True
+    
+    return False
+
 def logits_to_ave_logit_diff(
     logits: Float[Tensor, "batch seq d_vocab"],
     answer_tokens: Float[Tensor, "batch 2"] = answer_tokens,
@@ -69,8 +81,9 @@ clean_tokens = model.to_tokens(prompts, prepend_bos=True).to(device)
 flipped_indices = [i+1 if i % 2 == 0 else i-1 for i in range(len(clean_tokens))]
 flipped_tokens = clean_tokens[flipped_indices]
 
-clean_logits, clean_cache = model.run_with_cache(clean_tokens)
-flipped_logits, flipped_cache = model.run_with_cache(flipped_tokens)
+with t.inference_mode():
+    clean_logits, clean_cache = model.run_with_cache(clean_tokens,names_filter=patching_filter)
+    flipped_logits, flipped_cache = model.run_with_cache(flipped_tokens,names_filter=patching_filter)
 
 clean_logit_diff = logits_to_ave_logit_diff(clean_logits, answer_tokens)
 flipped_logit_diff = logits_to_ave_logit_diff(flipped_logits, answer_tokens)
@@ -82,7 +95,6 @@ print(
 
 print(f"Clean logit diff: {clean_logit_diff:.4f}")
 print(f"Flipped logit diff: {flipped_logit_diff:.4f}")
-#%%
 
 def greater_than_metric_denoising(
     logits: Float[Tensor, "batch seq d_vocab"],
@@ -112,8 +124,6 @@ def greater_than_metric_noising(
     '''
     patched_logit_diff = logits_to_ave_logit_diff(logits, answer_tokens)
     return ((patched_logit_diff - clean_logit_diff) / (clean_logit_diff - flipped_logit_diff)).item()
-
-
 
 #%%
 
@@ -203,7 +213,7 @@ for s_layer, s_head in SENDER_HEADS:
             })
 
 #%%
-head_patch_res = sorted(head_patch_res, key=lambda x: x['score'], reverse=True)
+head_patch_res = sorted(head_patch_res, key=lambda x: x['score'])
 
 for item in head_patch_res:
     print(f"Edge {item['sender']} -> {item['receiver']}: {item['score']:.5f}")
@@ -214,16 +224,15 @@ for item in head_patch_res:
 
 # Testing edge between L20H12 and top 10 Layer 23 neurons
 
-SENDER_HEADS = [(2,2)]
-RECEIVER_NEURONS = [(23, 106), (23, 912), (23, 1448), (23, 963), (23, 659), (23, 687), (23, 875), (23,1073), (23,558), (23, 1349)]
-
+SENDER_HEADS = [(25,7)]
+RECEIVER_NEURONS = [(34, 7828)]
 
 results = path_patch(
     model,
     orig_input=clean_tokens,
     new_input=flipped_tokens,
-    sender_nodes=IterNode('z'),
-    receiver_nodes=Node("resid_mid", layer=19),
+    sender_nodes=IterNode("z"),
+    receiver_nodes=[Node("pre", layer=n_l, neuron=n_n) for n_l, n_n in RECEIVER_NEURONS],
     patching_metric=greater_than_metric_noising,
     verbose=True,
 )
@@ -233,7 +242,7 @@ results
 #%%
 imshow(
     results['z'],
-    title="Direct effect of each head on mlp 19",
+    title="Path patch where receiver Node = N30I1114",
     labels={"x": "Head", "y": "Layer", "color": "Logit diff variation"},
     border=True,
     width=600,

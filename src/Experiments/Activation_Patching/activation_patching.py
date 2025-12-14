@@ -18,19 +18,14 @@ from transformer_lens.HookedTransformer import HookedTransformer
 #%%
 model = HookedTransformer.from_pretrained("Qwen/Qwen2.5-3b")
 
+#%%
+
 n_layers = model.cfg.n_layers
 n_heads = model.cfg.n_heads
 
 head_counts = t.zeros(n_layers, n_heads, dtype=t.long)
 
-prompts = [
-  {
-    "clean_prompt": "Is 9432 > 8231? Answer:",
-    "corrupted_prompt": "Is 8231 > 9432? Answer:",
-    "clean_label": " yes",
-    "corrupted_label": " NO"
-  },
-]
+
 #%% 
 for i, item in enumerate(prompts):
     print(f"prompt {i+1}/{len(prompts)}")

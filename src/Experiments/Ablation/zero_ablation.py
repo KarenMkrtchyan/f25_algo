@@ -21,26 +21,6 @@ task = "greater_than_4_digit"
 
 head_list=[
     {
-        "layer": 20,
-        "head": 12,
-        "pos": 11,
-    },
-    {
-        "layer": 19,
-        "head": 0,
-        "pos": 8,
-    },
-    {
-        "layer": 19,
-        "head": 0,
-        "pos": 9,
-    },
-    {
-        "layer": 19,
-        "head": 0,
-        "pos": 11,
-    },
-    {
         "layer": 9,
         "head": 9,
         "pos": 5,
@@ -75,7 +55,7 @@ with model.hooks(fwd_hooks=forward_hooks):
         num_fewshot=0,
         limit=1000,
         run=1,
-        ablated_head=ablated_head_str,
+        ablated_head="base",
         ablated_pos=head_list[0]["pos"],
     )
 # %%

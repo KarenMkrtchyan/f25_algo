@@ -1,3 +1,4 @@
+#%%
 import pandas as pd
 from transformer_lens.HookedTransformer import HookedTransformer
 
@@ -22,5 +23,9 @@ def neuron_logit_attribution(model, layers, yes_tok=" yes", no_tok=" NO"):
     return df.sort_values("abs_score", ascending=False).head(20)
 
 model = HookedTransformer.from_pretrained("Qwen/Qwen2.5-3b")
-top_neurons = neuron_logit_attribution(model, [23, 24, 30, 31, 32, 33, 34])
+#%%
+top_neurons = neuron_logit_attribution(model, [19, 20, 21, 22, 23, 24, 25, 30, 31, 32, 33, 34])
+
 print(top_neurons)
+
+# %%
