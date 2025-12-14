@@ -1,7 +1,7 @@
 import pandas as pd
 from transformer_lens.HookedTransformer import HookedTransformer
 
-def quick_logit_attribution(model, layers, yes_tok=" yes", no_tok=" NO"):
+def neuron_logit_attribution(model, layers, yes_tok=" yes", no_tok=" NO"):
     yes_id = model.to_single_token(yes_tok)
     no_id = model.to_single_token(no_tok)
     truth_dir = model.W_U[:, yes_id] - model.W_U[:, no_id]
@@ -22,5 +22,5 @@ def quick_logit_attribution(model, layers, yes_tok=" yes", no_tok=" NO"):
     return df.sort_values("abs_score", ascending=False).head(20)
 
 model = HookedTransformer.from_pretrained("Qwen/Qwen2.5-3b")
-top_neurons = quick_logit_attribution(model, [23, 24, 30, 31, 32, 33, 34])
+top_neurons = neuron_logit_attribution(model, [23, 24, 30, 31, 32, 33, 34])
 print(top_neurons)
