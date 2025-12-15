@@ -1792,52 +1792,80 @@ def plot_activation_steering(
     head,
     alpha,
     device,
-    save_path,
+    save_path=None,
     pos=-1,
+    max_points=2000,
 ):
     """
-    Figure-7-style activation steering plot for numeric comparison,
-    using PC1 computed from attention head outputs via get_head_output.
+    Figure-7-style activation steering using PC1 of attention head outputs.
+    Clean prompts = a > b
+    Corrupt prompts = b > a
     """
 
+    import torch
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from sklearn.decomposition import PCA
+
+    hook_z = f"blocks.{layer}.attn.hook_z"
+    hook_result = f"blocks.{layer}.attn.hook_result"
+
     # ------------------------------------------------------------
-    # 1. Collect head outputs and compute PC1
+    # 1. Collect head activations (CPU, subsampled)
     # ------------------------------------------------------------
-    acts = []
+    clean_acts = []
+    corrupt_acts = []
 
-    for batch in batches_base + batches_src:
-        batch = batch.to(device)
-        _, cache = model.run_with_cache(batch)
+    def collect_acts(batches, store, label):
+        nonlocal clean_acts, corrupt_acts
 
-        head_out = get_head_output(
-            cache=cache,
-            model=model,
-            layer=layer,
-            head=head,
-            pos=pos,
-        )  # [batch, d_head]
+        with torch.no_grad():
+            for batch in batches:
+                batch = batch.to(device)
 
-        acts.append(head_out.detach().cpu())
+                _, cache = model.run_with_cache(
+                    batch,
+                    names_filter=hook_z
+                )
 
-    X = t.cat(acts, dim=0)
-    X = X - X.mean(dim=0, keepdim=True)
+                # [batch, seq, heads, d_head] → [batch, d_head]
+                z = cache[hook_z][:, pos, head, :].cpu()
+                store.append(z)
 
-    # PCA via SVD
-    _, _, Vt = t.linalg.svd(X, full_matrices=False)
-    pc1 = Vt[0]
+                del cache
+                torch.cuda.empty_cache()
+
+                if sum(x.shape[0] for x in store) >= max_points:
+                    break
+
+    collect_acts(batches_base, clean_acts, "clean")
+    collect_acts(batches_src, corrupt_acts, "corrupt")
+
+    clean_X = torch.cat(clean_acts, dim=0)[:max_points]
+    corrupt_X = torch.cat(corrupt_acts, dim=0)[:max_points]
+
+    X = torch.cat([clean_X, corrupt_X], dim=0).numpy()
+
+    # ------------------------------------------------------------
+    # 2. PCA on CPU
+    # ------------------------------------------------------------
+    pca = PCA(n_components=1)
+    pca.fit(X)
+    pc1 = torch.tensor(
+        pca.components_[0],
+        device=device,
+        dtype=torch.float32
+    )
     pc1 = pc1 / pc1.norm()
-    pc1 = pc1.to(device)
 
     # ------------------------------------------------------------
-    # 2. Logit difference helper
+    # 3. Logit difference helper
     # ------------------------------------------------------------
     def logit_diff(logits):
-        yes = logits[:, -1, yes_id]
-        no  = logits[:, -1, no_id]
-        return (yes - no).detach().cpu()
+        return (logits[:, -1, yes_id] - logits[:, -1, no_id]).detach().cpu()
 
     # ------------------------------------------------------------
-    # 3. Steering hook (head-level, exact paper analogue)
+    # 4. Steering hook
     # ------------------------------------------------------------
     def make_steering_hook(pc1, alpha, head, pos, sign):
         def hook(attn_result, hook):
@@ -1845,42 +1873,42 @@ def plot_activation_steering(
             return attn_result
         return hook
 
-
     # ------------------------------------------------------------
-    # 4. Run batches with / without steering
+    # 5. Run batches (with / without steering)
     # ------------------------------------------------------------
     def run_batches(batches, steer=False, sign=+1):
         diffs = []
 
-        for batch in batches:
-            batch = batch.to(device)
+        with torch.no_grad():
+            for batch in batches:
+                batch = batch.to(device)
 
-            if not steer:
-                logits = model(batch)
-            else:
-                with model.hooks(
-                    fwd_hooks=[
-                        (
-                            f"blocks.{layer}.attn.hook_result",
-                            make_steering_hook(pc1, alpha, head, pos, sign),
-                        )
-                    ]
-                ):
+                if not steer:
                     logits = model(batch)
+                else:
+                    with model.hooks(
+                        fwd_hooks=[
+                            (
+                                hook_result,
+                                make_steering_hook(pc1, alpha, head, pos, sign),
+                            )
+                        ]
+                    ):
+                        logits = model(batch)
 
-            diffs.append(logit_diff(logits))
+                diffs.append(logit_diff(logits))
 
-        return t.cat(diffs).numpy()
+        return torch.cat(diffs).numpy()
 
-    # ------------------------------------------------------------
-    # 5. Collect statistics
-    # ------------------------------------------------------------
     clean_before = run_batches(batches_base, steer=False)
     clean_after  = run_batches(batches_base, steer=True, sign=-1)
 
     corrupt_before = run_batches(batches_src, steer=False)
     corrupt_after  = run_batches(batches_src, steer=True, sign=+1)
 
+    # ------------------------------------------------------------
+    # 6. Statistics
+    # ------------------------------------------------------------
     means = [
         clean_before.mean(),
         clean_after.mean(),
@@ -1896,12 +1924,12 @@ def plot_activation_steering(
     ]
 
     # ------------------------------------------------------------
-    # 6. Plot (Figure-7 style)
+    # 7. Plot (Figure-7 style)
     # ------------------------------------------------------------
     fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
 
     axes[0].bar(
-        ["Before steering", "After steering"],
+        ["Before", "After"],
         means[:2],
         yerr=sems[:2],
         capsize=5,
@@ -1910,7 +1938,7 @@ def plot_activation_steering(
     axes[0].set_ylabel("Logit Difference (Yes − No)")
 
     axes[1].bar(
-        ["Before steering", "After steering"],
+        ["Before", "After"],
         means[2:],
         yerr=sems[2:],
         capsize=5,
@@ -1918,7 +1946,7 @@ def plot_activation_steering(
     axes[1].set_title("b > a")
 
     fig.suptitle(
-        f"PCA steering at L{layer}H{head}, α={alpha}",
+        f"PCA Steering — L{layer}H{head}, α={alpha}, pos={pos}",
         fontsize=12,
     )
 
@@ -1926,7 +1954,8 @@ def plot_activation_steering(
 
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    
+
     plt.show()
 
     return pc1
+
