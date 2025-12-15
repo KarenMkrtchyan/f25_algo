@@ -163,7 +163,7 @@ def main():
         print("   python src/cloud/connect_to_lambda.py")
         sys.exit(1)
     
-    instance = active_instances[1]
+    instance = active_instances[0]
     instance_id = instance.get("id")
     ip = instance.get("ip")
     

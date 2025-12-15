@@ -15,8 +15,11 @@ def get_device():
             return "cuda"
         else:
             # If this ever prints, something is wrong with the Lambda setup
-            print("⚠️ FORCE_CUDA=1 but torch.cuda.is_available() is False. Falling back to CPU.")
-            return "cpu"
+            print("⚠️ FORCE_CUDA=1 but torch.cuda.is_available() is False. Falling back to MPS/CPU.")
+            if hasattr(t.backends, "mps") and t.backends.mps.is_available():
+                return "mps"
+            else:
+                return "cpu"
 
     # Case 2: Local dev (Mac etc.) – no FORCE_CUDA
     if hasattr(t.backends, "mps") and t.backends.mps.is_available():

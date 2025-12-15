@@ -110,7 +110,7 @@ def main():
     if active_instances:
         print("\n✅ Found active instance(s)!")
         # Use the first active instance
-        instance = active_instances[1]
+        instance = active_instances[0]
         ip = instance.get("ip")
         instance_id = instance.get("id")
         
