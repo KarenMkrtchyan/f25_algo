@@ -24,7 +24,7 @@ yes_id = model.to_single_token(" Yes")
 no_id = model.to_single_token(" No")
 
 Attention_Layer = 24
-Attention_Head = 5
+Attention_Head = 7
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
 num_batches = len(batches_src)
@@ -36,7 +36,7 @@ display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "4digit")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
-plot_path = os.path.join(output_folder, "Activation_Steering.png")
+plot_path = os.path.join(output_folder, f"Activation_Steering_Layer{Attention_Layer}_Head{Attention_Head}.png")
 
 pc1 = plot_activation_steering(
     model=model,
