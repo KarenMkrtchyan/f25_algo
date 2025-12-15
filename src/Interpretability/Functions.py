@@ -1798,8 +1798,7 @@ def plot_activation_steering(
 ):
     """
     Figure-7-style activation steering using PC1 of attention head outputs.
-    Clean prompts = a > b
-    Corrupt prompts = b > a
+    Steering is applied in HEAD SPACE via attn.hook_z.
     """
 
     import torch
@@ -1808,17 +1807,14 @@ def plot_activation_steering(
     from sklearn.decomposition import PCA
 
     hook_z = f"blocks.{layer}.attn.hook_z"
-    hook_result = f"blocks.{layer}.attn.hook_result"
 
     # ------------------------------------------------------------
-    # 1. Collect head activations (CPU, subsampled)
+    # 1. Collect head activations (CPU, minimal cache)
     # ------------------------------------------------------------
     clean_acts = []
     corrupt_acts = []
 
-    def collect_acts(batches, store, label):
-        nonlocal clean_acts, corrupt_acts
-
+    def collect_acts(batches, store):
         with torch.no_grad():
             for batch in batches:
                 batch = batch.to(device)
@@ -1838,8 +1834,8 @@ def plot_activation_steering(
                 if sum(x.shape[0] for x in store) >= max_points:
                     break
 
-    collect_acts(batches_base, clean_acts, "clean")
-    collect_acts(batches_src, corrupt_acts, "corrupt")
+    collect_acts(batches_base, clean_acts)
+    collect_acts(batches_src, corrupt_acts)
 
     clean_X = torch.cat(clean_acts, dim=0)[:max_points]
     corrupt_X = torch.cat(corrupt_acts, dim=0)[:max_points]
@@ -1847,10 +1843,11 @@ def plot_activation_steering(
     X = torch.cat([clean_X, corrupt_X], dim=0).numpy()
 
     # ------------------------------------------------------------
-    # 2. PCA on CPU
+    # 2. PCA on CPU (PC1 in head space)
     # ------------------------------------------------------------
     pca = PCA(n_components=1)
     pca.fit(X)
+
     pc1 = torch.tensor(
         pca.components_[0],
         device=device,
@@ -1865,16 +1862,17 @@ def plot_activation_steering(
         return (logits[:, -1, yes_id] - logits[:, -1, no_id]).detach().cpu()
 
     # ------------------------------------------------------------
-    # 4. Steering hook
+    # 4. Steering hook (HEAD SPACE)
     # ------------------------------------------------------------
     def make_steering_hook(pc1, alpha, head, pos, sign):
-        def hook(attn_result, hook):
-            attn_result[:, pos, head, :] += sign * alpha * pc1
-            return attn_result
+        def hook(z, hook):
+            # z: [batch, seq, heads, d_head]
+            z[:, pos, head, :] += sign * alpha * pc1
+            return z
         return hook
 
     # ------------------------------------------------------------
-    # 5. Run batches (with / without steering)
+    # 5. Run batches with / without steering
     # ------------------------------------------------------------
     def run_batches(batches, steer=False, sign=+1):
         diffs = []
@@ -1889,7 +1887,7 @@ def plot_activation_steering(
                     with model.hooks(
                         fwd_hooks=[
                             (
-                                hook_result,
+                                hook_z,
                                 make_steering_hook(pc1, alpha, head, pos, sign),
                             )
                         ]
@@ -1928,21 +1926,11 @@ def plot_activation_steering(
     # ------------------------------------------------------------
     fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
 
-    axes[0].bar(
-        ["Before", "After"],
-        means[:2],
-        yerr=sems[:2],
-        capsize=5,
-    )
+    axes[0].bar(["Before", "After"], means[:2], yerr=sems[:2], capsize=5)
     axes[0].set_title("a > b")
     axes[0].set_ylabel("Logit Difference (Yes − No)")
 
-    axes[1].bar(
-        ["Before", "After"],
-        means[2:],
-        yerr=sems[2:],
-        capsize=5,
-    )
+    axes[1].bar(["Before", "After"], means[2:], yerr=sems[2:], capsize=5)
     axes[1].set_title("b > a")
 
     fig.suptitle(
@@ -1958,4 +1946,5 @@ def plot_activation_steering(
     plt.show()
 
     return pc1
+
 
