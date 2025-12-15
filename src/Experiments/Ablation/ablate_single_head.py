@@ -13,16 +13,16 @@ from transformer_lens import HookedTransformer, utils
 torch.set_grad_enabled(False)
 torch.cuda.empty_cache()
 
-model = HookedTransformer.from_pretrained("Qwen/Qwen3-1.7b")
+model = HookedTransformer.from_pretrained("Qwen/Qwen2.5-3b")
 
 #%%
 task = "greater_than_4_digit"
 
 head_list=[
     {
-        "layer": 15,
+        "layer": 9,
         "head": 9,
-        "pos": 11,
+        "pos": 5,
     },
 ]
 
@@ -56,7 +56,7 @@ with model.hooks(fwd_hooks=forward_hooks):
         limit=1000,
         run=1,
         ablated_head=ablated_head_str,
-        ablated_pos="11,11,5,8",
+        ablated_pos="11",
     )
 
 

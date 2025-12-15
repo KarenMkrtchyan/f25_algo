@@ -4,7 +4,7 @@ import os
 import pandas as pd
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 import plotly.express as px
-from data.prompts import batched_prompts as prompt_list
+from data.act_prompts import prompt_list
 from Interpretability.path_patching import act_patch, Node, IterNode, imshow, hist
 from transformer_lens.HookedTransformer import HookedTransformer
 import torch as t
@@ -12,41 +12,55 @@ from torch import Tensor
 from jaxtyping import Float, Int, Bool
 
 
+
 # %%
 device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
 model = HookedTransformer.from_pretrained(
-    "Qwen/Qwen3-1.7b",
+    "Qwen/Qwen2.5-3b",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
     refactor_factored_attn_matrices=False,
+    torch_dtype=t.bfloat16,
 )
 
 model.set_use_split_qkv_input(True)
 
 #%%
+
 prompts = [p["clean_prompt"] for p in prompt_list]
 labels = [p["clean_label"] for p in prompt_list]
 
 # Define the answers for each prompt, in the form (correct, incorrect)
 #%%
-answers = [("Yes", "No") if label == "Yes" else ("No", "Yes") for label in labels]
+answers = [(" yes", " NO") if label == " yes" else (" NO", " yes") for label in labels]
 
 # Define the answer tokens (same shape as the answers)
-yes_id = model.to_single_token("Yes")
-no_id  = model.to_single_token("No")
+yes_id = model.to_single_token(" yes")
+no_id  = model.to_single_token(" NO")
 
 answer_tokens = []
 for label in labels:
-    if label == "Yes":
+    if label == " yes":
         answer_tokens.append([yes_id, no_id])
     else:
         answer_tokens.append([no_id, yes_id])
 answer_tokens = t.tensor(answer_tokens, device=device)
 
 #%%
+
+
+def patching_filter(name):
+    if any(n in name for n in ["resid_pre", "attn_out", "mlp_out", "z"]):
+        return True
+
+    if "hook_q" in name and ".0." in name:
+        return True
+    
+    return False
+
 def logits_to_ave_logit_diff(
     logits: Float[Tensor, "batch seq d_vocab"],
     answer_tokens: Float[Tensor, "batch 2"] = answer_tokens,
@@ -72,8 +86,9 @@ clean_tokens = model.to_tokens(prompts, prepend_bos=True).to(device)
 flipped_indices = [i+1 if i % 2 == 0 else i-1 for i in range(len(clean_tokens))]
 flipped_tokens = clean_tokens[flipped_indices]
 
-clean_logits, clean_cache = model.run_with_cache(clean_tokens)
-flipped_logits, flipped_cache = model.run_with_cache(flipped_tokens)
+with t.inference_mode():
+    clean_logits, clean_cache = model.run_with_cache(clean_tokens,names_filter=patching_filter)
+    flipped_logits, flipped_cache = model.run_with_cache(flipped_tokens,names_filter=patching_filter)
 
 clean_logit_diff = logits_to_ave_logit_diff(clean_logits, answer_tokens)
 flipped_logit_diff = logits_to_ave_logit_diff(flipped_logits, answer_tokens)
