@@ -1693,74 +1693,82 @@ def plot_head_PCA(
     save_path=None,
     max_points=600,
 ):
-    """
-    Performs PCA on the output of (layer, head) at the final position.
-    Clean prompts = class 1 (a>b)
-    Corrupt prompts = class 0 (b>a)
-    """
+
+    import torch as t
+    import numpy as np
+    from sklearn.decomposition import PCA
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
 
     clean_outputs = []
     corrupt_outputs = []
 
     last_pos = -1
 
-    # Loop through batches and extract head output at last token
-    for bb, sb in zip(batches_base, batches_src):
-        # Forward passes with cache
-        _, clean_cache = model.run_with_cache(bb)
-        _, corrupt_cache = model.run_with_cache(sb)
+    hook_name = f"blocks.{layer}.attn.hook_z"
 
-        # Head output of chosen head
-        clean_head = get_head_output(clean_cache, model, layer, head, last_pos)
-        corrupt_head = get_head_output(corrupt_cache, model, layer, head, last_pos)
+    with t.no_grad():
+        for bb, sb in zip(batches_base, batches_src):
 
-        clean_outputs.append(clean_head.detach().cpu())
-        corrupt_outputs.append(corrupt_head.detach().cpu())
+            # ---- clean ----
+            _, clean_cache = model.run_with_cache(
+                bb,
+                names_filter=hook_name
+            )
 
-    # Combine
-    clean_mat = t.cat(clean_outputs, dim=0).numpy()
-    corrupt_mat = t.cat(corrupt_outputs, dim=0).numpy()
+            # shape: [batch, seq, heads, d_head]
+            clean_z = clean_cache[hook_name][:, last_pos, head, :]
+            clean_outputs.append(clean_z.cpu())
 
-    # Optional: limit number of points for visualization
-    if clean_mat.shape[0] > max_points:
-        clean_mat = clean_mat[:max_points]
-        corrupt_mat = corrupt_mat[:max_points]
+            del clean_cache
+            t.cuda.empty_cache()
 
-    # Build labels
+            # ---- corrupt ----
+            _, corrupt_cache = model.run_with_cache(
+                sb,
+                names_filter=hook_name
+            )
+
+            corrupt_z = corrupt_cache[hook_name][:, last_pos, head, :]
+            corrupt_outputs.append(corrupt_z.cpu())
+
+            del corrupt_cache
+            t.cuda.empty_cache()
+
+            # early stop once we have enough points
+            if sum(x.shape[0] for x in clean_outputs) >= max_points:
+                break
+
+    # Stack on CPU
+    clean_mat = t.cat(clean_outputs, dim=0)[:max_points].numpy()
+    corrupt_mat = t.cat(corrupt_outputs, dim=0)[:max_points].numpy()
+
     X = np.vstack([clean_mat, corrupt_mat])
-    y = np.array([1]*clean_mat.shape[0] + [0]*corrupt_mat.shape[0])
+    y = np.array([1]*len(clean_mat) + [0]*len(corrupt_mat))
 
-    # PCA
+    # PCA (CPU)
     pca = PCA(n_components=2)
     pcs = pca.fit_transform(X)
 
-    pc1, pc2 = pcs[:, 0], pcs[:, 1]
-
-    # Prepare DataFrame for seaborn
-    import pandas as pd
     df = pd.DataFrame({
-        "PC1": pc1,
-        "PC2": pc2,
+        "PC1": pcs[:, 0],
+        "PC2": pcs[:, 1],
         "Class": np.where(y == 1, "Greater (a>b)", "Less (b>a)")
     })
 
-    # Plot
     plt.figure(figsize=(8, 6))
     sns.scatterplot(
         data=df,
         x="PC1",
         y="PC2",
         hue="Class",
-        palette={"Greater (a>b)": "blue", "Less (b>a)": "red"},
         s=40,
         alpha=0.8
     )
 
-    plt.title(title or f"PCA of Layer {layer}, Head {head} Outputs")
-    plt.xlabel("PC1")
-    plt.ylabel("PC2")
-    plt.grid(True, linestyle="--", alpha=0.3)
-    plt.legend()
+    plt.title(title or f"PCA of Layer {layer}, Head {head}")
+    plt.grid(alpha=0.3)
 
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
