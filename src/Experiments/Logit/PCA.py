@@ -23,31 +23,31 @@ device = get_device()
 yes_id = model.to_single_token(" Yes")
 no_id = model.to_single_token(" No")
 
-Attention_Layer = [13, 19, 26]
-Attention_Head = [2, 5, 8]
+Attention_Layer = 24
+Attention_Head = 0
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
 num_batches = len(batches_src)
 print(f"Batched into {num_batches} batches")
 print("\n")
 
-for head in Attention_Head:
-    print(f"Computing PCA on Layer{Attention_Layer}, Head{head}")
-    results_folder = "Results"
-    display_folder = os.path.join(results_folder, "Digit_Experiment")
-    digit_folder = os.path.join(display_folder, "4digit")
-    output_folder = os.path.join(digit_folder, f"{model_name}")
-    os.makedirs(output_folder, exist_ok=True)
-    PCA_path = os.path.join(output_folder, f"PCA_Layer{Attention_Layer}_Head{head}.png")
-    csv_path = os.path.join(output_folder, f"PCA_Layer{Attention_Layer}_Head{head}.csv")
 
-    df = plot_head_PCA(
-        model,
-        batches_base,
-        batches_src,
-        Attention_Layer,
-        head,
-        save_path = PCA_path
-    )
+print(f"Computing PCA on Layer{Attention_Layer}, Head{Attention_Head }")
+results_folder = "Results"
+display_folder = os.path.join(results_folder, "Digit_Experiment")
+digit_folder = os.path.join(display_folder, "4digit")
+output_folder = os.path.join(digit_folder, f"{model_name}")
+os.makedirs(output_folder, exist_ok=True)
+PCA_path = os.path.join(output_folder, f"PCA_Layer{Attention_Layer}_Head{Attention_Head}.png")
+csv_path = os.path.join(output_folder, f"PCA_Layer{Attention_Layer}_Head{Attention_Head}.csv")
 
-    df.to_csv(csv_path, index = False)
+df = plot_head_PCA(
+    model,
+    batches_base,
+    batches_src,
+    Attention_Layer,
+    Attention_Head,
+    save_path = PCA_path
+)
+
+df.to_csv(csv_path, index = False)
