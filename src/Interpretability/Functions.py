@@ -1899,10 +1899,10 @@ def plot_activation_steering(
         return torch.cat(diffs).numpy()
 
     clean_before = run_batches(batches_base, steer=False)
-    clean_after  = run_batches(batches_base, steer=True, sign=-1)
+    clean_after  = run_batches(batches_base, steer=True, sign=1)
 
     corrupt_before = run_batches(batches_src, steer=False)
-    corrupt_after  = run_batches(batches_src, steer=True, sign=+1)
+    corrupt_after  = run_batches(batches_src, steer=True, sign=-1)
 
     # ------------------------------------------------------------
     # 6. Statistics

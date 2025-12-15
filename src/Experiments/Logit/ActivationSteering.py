@@ -46,7 +46,7 @@ pc1 = plot_activation_steering(
     no_id=no_id,
     layer=Attention_Layer,
     head=Attention_Head,
-    alpha=5.0,
+    alpha=20.0,
     save_path = plot_path,
     device=device,
 )
