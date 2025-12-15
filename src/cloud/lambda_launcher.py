@@ -36,15 +36,31 @@ def wait_for_instance_ready(instance_id, timeout=600):
 
     raise TimeoutError("❌ Instance did not become active in time")
 
-def launch_instance(instance_type, region_name, ssh_key_id, ssh_key_name):
+def launch_instance(instance_type, region_name, ssh_key_id=None, ssh_key_name=None):
+    """
+    Launch a Lambda Cloud instance.
+    
+    Args:
+        instance_type: e.g., "gpu_1x_a10", "gpu_1x_a100_80gb"
+        region_name: e.g., "us-east-1", "us-west-2"
+        ssh_key_id: Optional SSH key ID
+        ssh_key_name: Optional SSH key name (can use either id or name)
+    
+    Returns:
+        instance_id: The ID of the launched instance
+    """
     url = f"{BASE_URL}/instance-operations/launch"
 
     payload = {
         "instance_type_name": instance_type,
         "region_name": region_name,
-        "ssh_key_ids": [ssh_key_id],
-        "ssh_key_names": [ssh_key_name]
     }
+    
+    # Add SSH key - prefer name over id if both provided
+    if ssh_key_name:
+        payload["ssh_key_names"] = [ssh_key_name]
+    elif ssh_key_id:
+        payload["ssh_key_ids"] = [ssh_key_id]
 
     resp = requests.post(url, headers=headers(), json=payload)
     print("🔥 Launch response status:", resp.status_code)
@@ -52,10 +68,21 @@ def launch_instance(instance_type, region_name, ssh_key_id, ssh_key_name):
     resp.raise_for_status()
 
     data = resp.json()
-    instance_id = data["data"]["instance_ids"][0]
-    print("🚀 Launched instance:", instance_id)
-
-    return instance_id
+    
+    # Handle different response formats
+    if "data" in data:
+        if "instance_ids" in data["data"] and len(data["data"]["instance_ids"]) > 0:
+            instance_id = data["data"]["instance_ids"][0]
+            print("🚀 Launched instance:", instance_id)
+            return instance_id
+        elif "operation_id" in data["data"]:
+            # If we get an operation ID, poll it
+            op_id = data["data"]["operation_id"]
+            print(f"⏳ Got operation ID: {op_id}, polling...")
+            instance_id = wait_for_operation(op_id)
+            return instance_id
+    
+    raise RuntimeError(f"Unexpected API response format: {data}")
 
 
 
@@ -137,3 +164,61 @@ def terminate_instance(instance_id: str):
             f"Terminate failed ({resp.status_code}): {resp.text}"
         )
     print(f"🛑 Terminated instance {instance_id}")
+
+
+def list_instances():
+    """
+    List all instances in your Lambda Cloud account.
+    """
+    url = f"{BASE_URL}/instances"
+    resp = requests.get(url, headers=headers())
+    resp.raise_for_status()
+    data = resp.json()
+    return data.get("data", [])
+
+
+def list_ssh_keys():
+    """
+    List all SSH keys in your Lambda Cloud account.
+    """
+    url = f"{BASE_URL}/ssh-keys"
+    resp = requests.get(url, headers=headers())
+    resp.raise_for_status()
+    data = resp.json()
+    return data.get("data", [])
+
+
+def list_instance_types():
+    """
+    List available instance types and their availability.
+    """
+    url = f"{BASE_URL}/instance-types"
+    resp = requests.get(url, headers=headers())
+    resp.raise_for_status()
+    data = resp.json()
+    return data.get("data", {})
+
+
+def ssh_connect(ip: str, ssh_key_path: str = None, interactive: bool = True):
+    """
+    SSH into the instance interactively.
+    Assumes username 'ubuntu' (Lambda default images).
+    """
+    user_at_host = f"ubuntu@{ip}"
+    key_arg = []
+    if ssh_key_path:
+        key_arg = ["-i", ssh_key_path]
+
+    cmd = [
+        "ssh",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        *key_arg,
+        user_at_host,
+    ]
+    print(f"🔗 Connecting to {ip}...")
+    print(" ", " ".join(cmd))
+    if interactive:
+        subprocess.call(cmd)
+    else:
+        subprocess.check_call(cmd)

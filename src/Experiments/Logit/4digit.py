@@ -13,7 +13,7 @@ from Interpretability import build_dataset, compute_act_patching, get_logit_diff
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
-dataset = build_dataset(n=10, low=1000, high=9999)
+dataset = build_dataset(n=100, low=1000, high=9999)
 
 #model_name = "pythia-70m"
 model_name = "qwen2.5-3b"

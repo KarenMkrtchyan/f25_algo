@@ -18,7 +18,7 @@ for model_name in models:
     print("\n")
 
     for text in prompts:
-        candidates = [" Yes", " No", " Mary", " Cow", " Ocean"]
+        candidates = [" Yes", " No"]
 
         tokens = model.to_tokens(text, prepend_bos=False)
         print("Tokens:", tokens)

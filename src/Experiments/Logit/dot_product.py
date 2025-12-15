@@ -12,10 +12,12 @@ from utils.device_utils import get_device
 from Interpretability import build_dataset, build_numeric_batches, compute_baselines, plot_head_to_neuron_dot_products
 import transformer_lens.utils as utils
 
-dataset = build_dataset(n=10, low=1000, high=9999)
+#dataset = build_dataset(n=100, low=1000, high=9999)
+dataset = build_dataset(n=1, low=1000, high=9999)
 
 #model_name = "pythia-70m"
-model_name = "qwen2.5-3b"
+#model_name = "qwen2.5-3b"
+model_name = "pythia-160m"
 model = load_model(model_name)
 model.set_use_attn_result(True)
 device = get_device()
