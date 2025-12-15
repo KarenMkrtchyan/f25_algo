@@ -19,7 +19,7 @@ dataset = build_dataset(n=100, low=1000, high=9999)
 model_name = "qwen2.5-3b"
 model = load_model(model_name)
 device = get_device()
-layer = 5
+layer = 23
 
 yes_id = model.to_single_token(" Yes")
 no_id = model.to_single_token(" No")

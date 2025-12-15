@@ -1459,9 +1459,10 @@ def patch_mlp_neurons(model, layer, batches_base, batches_src,
 
     n_neurons = model.cfg.d_mlp 
     neuron_scores = []
+    counter = 0
 
     # Iterate over neurons in this layer
-    for neuron_idx in range(n_neurons):
+    for neuron_idx in tqdm(range(n_neurons), desc=f"Patching layer {layer}"):
         scores = []
 
         # Patch each batch individually then mean-aggregate later
