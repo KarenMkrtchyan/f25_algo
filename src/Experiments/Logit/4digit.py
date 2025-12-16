@@ -58,7 +58,7 @@ print("\n")
 tokens_str = model.to_str_tokens(model.to_tokens("Is 1234 > 5678? Answer:"))
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
-digit_folder = os.path.join(display_folder, "4digit")
+digit_folder = os.path.join(display_folder, "8digit")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
 csv_path = os.path.join(output_folder, "head_importance.csv")
