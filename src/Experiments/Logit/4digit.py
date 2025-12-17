@@ -13,7 +13,7 @@ from Interpretability import build_dataset, compute_act_patching, get_logit_diff
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
-dataset = build_dataset(n=100, low=10000000, high=99999999)
+dataset = build_dataset(n=100, low=10, high=99)
 
 #model_name = "pythia-70m"
 model_name = "qwen2.5-3b"
@@ -55,7 +55,7 @@ print(patch_full.shape)
 print("Activation patching complete!")
 print("\n")
 
-tokens_str = model.to_str_tokens(model.to_tokens("Is 87654321 > 12345678? Answer:"))
+tokens_str = model.to_str_tokens(model.to_tokens("Is 43 > 21? Answer:"))
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "8digit")
