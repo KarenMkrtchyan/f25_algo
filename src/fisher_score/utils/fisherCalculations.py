@@ -3,25 +3,23 @@ from transformer_lens import HookedTransformer
 from tqdm import tqdm
 from typing import Dict, List, DefaultDict, Literal, Union
 import numpy as np
+DigitPosition = Literal[
+    "ten_thousands",
+    "thousands",
+    "hundreds",
+    "tens",
+    "units"
+]
 
-DigitPosition = Literal["hundreds", "tens", "units"]
 
-# For 3 digits 
 class FisherCalculations:
     """
     Compute Fisher scores for neuron activations in a HookedTransformer model.
 
-    Implements the method described in:
-    "Modular Arithmetic: Language Models Solve Math Digit by Digit" (Baeumel et al., 2025).
-
     Fisher score for neuron i:
         F_i = Σ_c n_c (μ_{i,c} - μ_i)^2 / Σ_c n_c σ^2_{i,c}
 
-    where:
-        μ_{i,c}  = mean activation of neuron i for class c
-        μ_i      = global mean activation of neuron i
-        σ^2_{i,c}= within-class variance of neuron i
-        n_c      = number of samples in class c
+    This class is fully compatible with 5-digit comparison data.
     """
 
     def __init__(
@@ -29,13 +27,10 @@ class FisherCalculations:
         model: HookedTransformer,
         data: DefaultDict[str, DefaultDict[str, List[Dict]]],
         device: str,
-        start_layer: int = 15,
-        end_layer: int = 30,
+        start_layer: int = 0,
+        end_layer: int = 20,
         batch_size: int = 64
     ) -> None:
-        if model.tokenizer is None:
-            raise ValueError("Model must have a valid tokenizer. Please ensure the model was loaded correctly.")
-
         self.model = model
         self.data = data
         self.device = device
@@ -43,29 +38,23 @@ class FisherCalculations:
         self.end_layer = end_layer
         self.batch_size = batch_size
 
-        self.class_stats: Dict[str, Dict[str, Union[torch.Tensor, int]]] = {}
-        self.global_mean: torch.Tensor | None = None
-        self.between_var: torch.Tensor | None = None
+        self.class_stats = {}
+        self.global_mean = None
+        self.between_var = None
 
-    # -------------------------------------------------------------------------
-    # Step 1: Compute mean and variance per neuron, per digit-pair class
-    # -------------------------------------------------------------------------
     def calc_in_class_stats(self, digit_position: DigitPosition) -> None:
-        """
-        Compute class-wise mean and variance of neuron activations for a given digit position.
-        Saves results in self.class_stats.
-        """
-        self.class_stats = {}  # reset per run
+        """Compute mean/variance for each digit-pair class."""
+        self.class_stats = {}
 
-        for pair_class, examples in tqdm(self.data[digit_position].items(), desc=f"Processing {digit_position} groups"):
+        for pair_class, examples in tqdm(self.data[digit_position].items(), desc=f"Processing {digit_position}"):
+
             n = len(examples)
             if n < 2:
-                continue  # need at least 2 samples to compute variance
+                continue
 
             prompts = [ex["text"] for ex in examples]
             all_acts = []
 
-            # Batched inference
             for i in range(0, n, self.batch_size):
                 batch_prompts = prompts[i:i + self.batch_size]
                 tokens = self.model.to_tokens(batch_prompts, padding_side="left").to(self.device)
@@ -73,29 +62,22 @@ class FisherCalculations:
                 with torch.no_grad():
                     logits, cache = self.model.run_with_cache(tokens, remove_batch_dim=False)
 
-                all_acts_batch = []
+                layer_acts = []
                 for layer in range(self.start_layer, self.end_layer):
-                    activations = cache["mlp_out", layer]  # [batch, seq_len, n_neurons]
+                    activations = cache["mlp_out", layer]
+                    seq_lens = (tokens != self.model.tokenizer.pad_token_id).sum(dim=1)
+                    last_token = activations[torch.arange(len(seq_lens)), seq_lens - 1]
+                    layer_acts.append(last_token)
 
-                    # Get final token activations for each sequence
-                    seq_lens = (tokens != self.model.tokenizer.pad_token_id).sum(dim=1)  # type: ignore
-                    last_token_acts = activations[
-                        torch.arange(len(batch_prompts), device=self.device), seq_lens - 1, :
-                    ]
-                    all_acts_batch.append(last_token_acts)  # Append each layer's activations
+                layer_acts = torch.stack(layer_acts, dim=0)  # [layers, batch, neurons]
+                all_acts.append(layer_acts.cpu())
 
-                all_acts_batch = torch.stack(all_acts_batch, dim=1)  # [batch, n_layers, n_neurons]
-                all_acts.append(all_acts_batch.detach().cpu())
-
-                # Clean up GPU memory
                 del logits, cache
                 torch.cuda.empty_cache()
 
-            # Combine results for this class
-            all_acts = torch.cat(all_acts, dim=0)  # [num_examples, n_neurons]
-            mean_vec = all_acts.mean(dim=0)
-            var_vec = all_acts.var(dim=0, unbiased=False)
-
+            all_acts = torch.cat(all_acts, dim=1)  # [layers, total_examples, neurons]
+            mean_vec = all_acts.mean(dim=1)
+            var_vec = all_acts.var(dim=1, unbiased=False)
 
             self.class_stats[pair_class] = {
                 "mean": mean_vec,
@@ -103,76 +85,42 @@ class FisherCalculations:
                 "n": n,
             }
 
-    # -------------------------------------------------------------------------
-    # Step 2: Compute global mean across all classes
-    # -------------------------------------------------------------------------
     def calc_global_mean(self) -> None:
-        """
-        Compute the global (sample-weighted) mean activation per neuron.
-        """
-        if not self.class_stats:
-            raise ValueError("Run calc_in_class_stats() before computing global mean.")
-
         first_mean = next(iter(self.class_stats.values()))["mean"]
-        n_layers, n_neurons = first_mean.shape # type: ignore
+        n_layers, n_neurons = first_mean.shape
 
-        weighted_sum = torch.zeros((n_layers, n_neurons))
-        total_samples = 0
+        weighted = torch.zeros((n_layers, n_neurons))
+        total = 0
 
-        for _, stats in self.class_stats.items():
-            n = stats["n"]
-            weighted_sum += stats["mean"] * n
-            total_samples += n
+        for stats in self.class_stats.values():
+            weighted += stats["mean"] * stats["n"]
+            total += stats["n"]
 
+        self.global_mean = weighted / total
 
-        self.global_mean = weighted_sum / total_samples
-
-    # -------------------------------------------------------------------------
-    # Step 3: Compute between-class variance
-    # -------------------------------------------------------------------------
     def calc_between_class_var(self) -> None:
-        """
-        Compute between-class variance (numerator of Fisher score).
-        """
-        if self.global_mean is None:
-            raise ValueError("Run calc_global_mean() before computing between-class variance.")
-
         n_layers, n_neurons = self.global_mean.shape
-        numerator_sum = torch.zeros((n_layers, n_neurons))
-        total_samples = 0
+        result = torch.zeros((n_layers, n_neurons))
+        total = 0
 
-        for _, stats in self.class_stats.items():
+        for stats in self.class_stats.values():
             n = stats["n"]
-            mean_vec = stats["mean"]
-            numerator_sum += n * (mean_vec - self.global_mean) ** 2
-            total_samples += n
+            result += n * (stats["mean"] - self.global_mean) ** 2
+            total += n
 
-        self.between_var = numerator_sum / max(total_samples - 1, 1)
+        self.between_var = result / max(total - 1, 1)
 
-    # -------------------------------------------------------------------------
-    # Step 4: Compute Fisher scores for all neurons
-    # -------------------------------------------------------------------------
     def calc_fisher(self) -> np.ndarray:
-        """
-        Compute Fisher scores for all neurons using previously computed stats.
-        Returns a tensor of shape [n_neurons].
-        """
-        if self.global_mean is None:
-            raise ValueError("Run calc_global_mean() before computing Fisher scores.")
-
         eps = 1e-12
         n_layers, n_neurons = self.global_mean.shape
 
-        between_sum = torch.zeros((n_layers, n_neurons))
-        within_sum = torch.zeros((n_layers, n_neurons))
+        between = torch.zeros((n_layers, n_neurons))
+        within = torch.zeros((n_layers, n_neurons))
 
-        for _, stats in self.class_stats.items():
-            n_c = stats["n"]
-            mu_ic = stats["mean"]
-            var_ic = stats["var"]
+        for stats in self.class_stats.values():
+            n = stats["n"]
+            between += n * (stats["mean"] - self.global_mean) ** 2
+            within  += n * stats["var"]
 
-            between_sum += n_c * (mu_ic - self.global_mean) ** 2
-            within_sum += n_c * var_ic
-
-        fisher_scores = between_sum / (within_sum + eps)
-        return fisher_scores.cpu().numpy() # shape [n_layers, n_neurons]
+        fisher = between / (within + eps)
+        return fisher.cpu().numpy()
