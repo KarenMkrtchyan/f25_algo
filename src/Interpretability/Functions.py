@@ -7,12 +7,19 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import pyarrow as pa
+import seaborn as sns
 import pyarrow.parquet as pq
+from sklearn.decomposition import PCA
 from tqdm import tqdm
+from neel_plotly import imshow, line, scatter
+import plotly.subplots as sp
+import plotly.graph_objects as go
 import yaml
 import json
 import torch as t
+import transformer_lens.patching as patching
 from utils import Setup
+from functools import partial
 from utils.model_config import load_model
 from utils.Setup import Float, Int, Tensor, HookPoint, t, einops, cv, display, HookedTransformer, Callable, functools, tqdm, utils
 
@@ -270,7 +277,7 @@ def visualize_ablation(
             z=ablation_scores.cpu().numpy(),
             x=list(range(model.cfg.n_heads)),
             y=list(range(model.cfg.n_layers)),
-            colorscale='RdBu',
+            color_continuous_scale="RdBu",
             colorbar=dict(title="Loss Difference")
         ))
         
@@ -941,7 +948,7 @@ def build_dataset(n=2000, seed=42, low=1, high=100000):
     data = []
     for _ in range(n):
         a = int(rng.integers(low, high))
-        b = int(rng.integers(low, high))
+        b = int(rng.integers(low, a))
         clean = make_prompt(a, b)
         corrupt = make_prompt(b, a)
         label = int(a > b)
@@ -955,16 +962,16 @@ def get_last_pos(model, prompt):
 def logit_diff(logits, index_a, index_b):
     return logits[0, -1, index_a] - logits[0, -1, index_b]
 
-def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos):
+def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos, Yes_index, No_index):
     def hook_fn(corrupt_act, hook):
         clean_act = clean_cache[hook_name]
         if clean_act.ndim == 3:
             new_act = corrupt_act.clone()
-            new_act[:, pos, :] = clean_act[:, pos, :]
+            new_act[:, pos, :] = clean_act[:, pos, :].to(corrupt_act.device)
             return new_act
         elif clean_act.ndim == 4:
             new_act = corrupt_act.clone()
-            new_act[:, :, pos, :] = clean_act[:, :, pos, :]
+            new_act[:, :, pos, :] = clean_act[:, :, pos, :].to(corrupt_act.device)
             return new_act
         else:
             raise ValueError("Unexpected activation shape")
@@ -974,7 +981,7 @@ def patch_component(model, corrupt_prompt, clean_cache, hook_name, pos):
         return_type="logits",
         fwd_hooks=[(hook_name, hook_fn)]
     )
-    return logit_diff(logits)
+    return logit_diff(logits, Yes_index, No_index)
 
 def serialize_cache(cache):
     out = {}
@@ -1010,118 +1017,374 @@ def load_or_generate_parquet(model, dataset, output_path, Yes_index, No_index):
             }
 
             row = {k: [v] for k, v in row.items()}
-
             table = pa.Table.from_pydict(row, schema=schema)
             writer.write_table(table)
 
         writer.close()
         print(f"Parquet file generated at {output_path}")
-
     else:
-        print(f"Parquet file already exists at {output_path}. Loading caches...")
+        print(f"Parquet file already exists at {output_path}. Streaming caches...")
 
-    df = pd.read_parquet(output_path)
+    def cache_stream():
+        pf = pq.ParquetFile(output_path)
+        for batch in pf.iter_batches(batch_size=1):
+            df = batch.to_pandas()
+            for _, row in df.iterrows():
+                yield {
+                    "clean_cache": dict_to_torch(json.loads(row["clean_caches"])),
+                    "corrupt_cache": dict_to_torch(json.loads(row["corrupt_caches"])),
+                    "logit_diff": row["logit_diffs"]
+                }
 
-    df["clean_caches"] = df["clean_caches"].apply(json.loads).apply(dict_to_torch)
-    df["corrupt_caches"] = df["corrupt_caches"].apply(json.loads).apply(dict_to_torch)
+    return cache_stream()
 
-    return df
-
-def iter_parquet_rows(path):
-    pf = pq.ParquetFile(path)
-    for batch in pf.iter_batches():
-        df = batch.to_pandas()
-        for _, row in df.iterrows():
-            yield {
-                "clean": dict_to_torch(json.loads(row["clean_caches"])),
-                "corrupt": dict_to_torch(json.loads(row["corrupt_caches"])),
-                "ld": row["logit_diffs"]
-            }
-
-def run_patching(df, dataset, model, components=None):
+def run_patching(dataset, model, cache_stream, Yes_index, No_index, components=None):
     num_layers = model.cfg.n_layers
 
-    components = {
-        "attn_heads": lambda L: f"blocks.{L}.attn.hook_result",
-        "mlp": lambda L: f"blocks.{L}.mlp.hook_post",
-        "resid_post": lambda L: f"blocks.{L}.hook_resid_post"
-    }
+    if components is None:
+        components = {
+            "attn_heads": lambda L: f"blocks.{L}.attn.hook_result",
+            "mlp": lambda L: f"blocks.{L}.mlp.hook_post",
+            "resid_post": lambda L: f"blocks.{L}.hook_resid_post"
+        }
 
     patch_effects = {}
     for name in components:
-        if name == "attn_heads":
-            patch_effects[name] = t.zeros(num_layers, model.cfg.n_heads)
-        else:
-            patch_effects[name] = t.zeros(num_layers)
+        device = model.cfg.device
 
-    for i, (clean, corrupt, a, b, label) in enumerate(tqdm(dataset, total=len(df))):
+        if name == "attn_heads":
+            patch_effects[name] = t.zeros(num_layers, model.cfg.n_heads, device=device).to(device)
+        else:
+            patch_effects[name] = t.zeros(num_layers, device=device).to(device)
+
+    for (clean, corrupt, a, b, label), cache_row in tqdm(zip(dataset, cache_stream), total=len(dataset)):
         pos = get_last_pos(model, corrupt)
-        clean_cache = df.loc[i, "clean_caches"]
-        corrupt_cache = df.loc[i, "corrupt_caches"]
-        base_ld = df.loc[i, "logit_diffs"]
+        clean_cache = {k: v.to(model.cfg.device) for k, v in cache_row["clean_cache"].items()}
+        corrupt_cache = {k: v.to(model.cfg.device) for k, v in cache_row["corrupt_cache"].items()}
+        base_ld = cache_row["logit_diff"]
 
         for name, hook_fn in components.items():
             for L in range(num_layers):
                 hook_name = hook_fn(L)
-                patched_ld = patch_component(model, corrupt, clean_cache, hook_name, pos)
+                patched_ld = patch_component(model, corrupt, clean_cache, hook_name, pos, Yes_index, No_index)
                 patch_effects[name][L] += patched_ld - base_ld
 
     for name in patch_effects:
-        patch_effects[name] /= len(df)
+        patch_effects[name] /= len(dataset)
 
     return patch_effects
 
-def plot_attention_head_heatmap(patch_effects, model, output_path="./figures"):
-    if output_path == None:
-        print("Provide valid output_path")
-        return None
-
+def plot_attention_head_heatmap(patch_effects, output_path="./figures"):
     attn = patch_effects["attn_heads"].cpu().numpy()
-
+    os.makedirs(output_path, exist_ok=True)
     plt.figure(figsize=(12, 6))
     plt.imshow(attn, cmap="coolwarm", aspect="auto")
     plt.colorbar(label="Δ logit diff (patched - corrupted)")
     plt.xlabel("Head")
     plt.ylabel("Layer")
     plt.title("Attention Head Patch Effects")
-
-    save_path = os.path.join(output_path, "attn_head_patch_heatmap.png")
-    plt.savefig(save_path, dpi=300)
+    plt.savefig(os.path.join(output_path, "attn_head_patch_heatmap.png"), dpi=300)
     plt.close()
 
-def plot_mlp_patch_bar(patch_effects, model, output_path):
-    if output_path == None:
-        print("Provide valid output_path")
-        return None
-
+def plot_mlp_patch_bar(patch_effects, output_path="./figures"):
     mlp = patch_effects["mlp"].cpu().numpy()
-
+    os.makedirs(output_path, exist_ok=True)
     plt.figure(figsize=(10, 4))
     plt.bar(range(len(mlp)), mlp)
     plt.title("MLP Patch Effects per Layer")
     plt.xlabel("Layer")
     plt.ylabel("Δ logit diff")
-
-    save_path = os.path.join(output_path, "mlp_patch_effects.png")
-    plt.savefig(save_path, dpi=300)
+    plt.savefig(os.path.join(output_path, "mlp_patch_effects.png"), dpi=300)
     plt.close()
 
-def plot_resid_patch_bar(patch_effects, model, output_path="./figures"):
-    if output_path == None:
-        print("Provide valid output_path")
-        return None
-
+def plot_resid_patch_bar(patch_effects, output_path="./figures"):
     resid = patch_effects["resid_post"].cpu().numpy()
-
+    os.makedirs(output_path, exist_ok=True)
     plt.figure(figsize=(10, 4))
     plt.bar(range(len(resid)), resid)
     plt.title("Residual Stream Patch Effects")
     plt.xlabel("Layer")
     plt.ylabel("Δ logit diff")
-
-    save_path = os.path.join(output_path, "resid_patch_effects.png")
-    plt.savefig(save_path, dpi=300)
+    plt.savefig(os.path.join(output_path, "resid_patch_effects.png"), dpi=300)
     plt.close()
+
+def plot_all_patch_effects(patch_effects, output_path="./figures", save_name="patch_summary.png"):
+    os.makedirs(output_path, exist_ok=True)
+
+    resid = patch_effects["resid_post"].detach().cpu().numpy()
+    mlp = patch_effects["mlp"].detach().cpu().numpy()
+    attn_heads = patch_effects["attn_heads"].detach().cpu().numpy()
+
+    num_layers = attn_heads.shape[0]
+    num_heads = attn_heads.shape[1]
+
+    fig = plt.figure(figsize=(18, 6), dpi=200)
+
+    gs = fig.add_gridspec(1, 4, width_ratios=[1.2, 1.2, 1.2, 1.2], wspace=0.4)
+
+    # ----------------- (a) Residual Stream -----------------
+    ax0 = fig.add_subplot(gs[0, 0])
+    im0 = ax0.imshow(resid[:, None], cmap="coolwarm", vmin=-np.abs(resid).max(), vmax=np.abs(resid).max(), aspect="auto")
+    ax0.set_title("Residual Stream")
+    ax0.set_ylabel("Layer")
+    ax0.set_xticks([])
+    fig.colorbar(im0, ax=ax0, fraction=0.046)
+
+    # ----------------- (b) MLP Output -----------------
+    ax1 = fig.add_subplot(gs[0, 1])
+    im1 = ax1.imshow(mlp[:, None], cmap="coolwarm", vmin=-np.abs(mlp).max(), vmax=np.abs(mlp).max(), aspect="auto")
+    ax1.set_title("MLP Output")
+    ax1.set_xticks([])
+    ax1.set_yticks([])
+    fig.colorbar(im1, ax=ax1, fraction=0.046)
+
+    # ----------------- (c) Attn Head Output -----------------
+    ax2 = fig.add_subplot(gs[0, 2])
+    im2 = ax2.imshow(attn_heads, cmap="coolwarm",
+                     vmin=-np.abs(attn_heads).max(), vmax=np.abs(attn_heads).max(),
+                     aspect="auto")
+    ax2.set_title("Attn Head Output")
+    ax2.set_xlabel("Head")
+    ax2.set_yticks([])
+    fig.colorbar(im2, ax=ax2, fraction=0.046)
+
+    # ----------------- (d) Mean Attn Across Heads -----------------
+    ax3 = fig.add_subplot(gs[0, 3])
+    attn_mean = attn_heads.mean(axis=1)
+    im3 = ax3.imshow(attn_mean[:, None], cmap="coolwarm",
+                     vmin=-np.abs(attn_mean).max(), vmax=np.abs(attn_mean).max(),
+                     aspect="auto")
+    ax3.set_title("Mean Head Effect")
+    ax3.set_yticks([])
+    ax3.set_xticks([])
+    fig.colorbar(im3, ax=ax3, fraction=0.046)
+
+    # Panel labels
+    for i, ax in enumerate([ax0, ax1, ax2, ax3]):
+        ax.text(-0.12, 1.05, f"({chr(ord('a') + i)})",
+                transform=ax.transAxes, fontsize=13, fontweight="bold")
+
+    plt.tight_layout()
+    fig.savefig(os.path.join(output_path, save_name))
+    plt.close(fig)
+
+def get_logit_diff(logits, answer_token_indices, mean=True):
+    answer_token_indices = answer_token_indices.to(logits.device)
+
+    if logits.ndim == 3:
+        logits = logits[:, -1, :]  # final token only
+
+    correct = answer_token_indices[:, 0]
+    incorrect = answer_token_indices[:, 1]
+
+    diff = logits.gather(1, correct.unsqueeze(1)) - logits.gather(1, incorrect.unsqueeze(1))
+
+    return diff.mean() if mean else diff
+
+
+def paper_plot(fig, tickangle=60):
+    """
+    Applies styling to the given plotly figure object targeting paper plot quality.
+    """
+    fig.update_layout({
+        'template': 'plotly_white',
+    })
+    fig.update_xaxes(showline=True, linewidth=2, linecolor='black', tickangle=tickangle,
+                    gridcolor='rgb(200,200,200)', griddash='dash', zeroline=False)
+    fig.update_yaxes(showline=True, linewidth=2, linecolor='black',
+                    gridcolor='rgb(200,200,200)', griddash='dash', zeroline=False)
+    fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+
+    return fig
+
+def compute_act_patching(model: HookedTransformer,
+                         metric: callable,
+                         yes_id: int,
+                         no_id: int,
+                         CLEAN_BASELINE: float,
+                         CORRUPTED_BASELINE: float,
+                         patching_type: str,
+                         batches_base_tokens: list,
+                         batches_src_tokens: list,
+                         batches: int):
+    # resid_streams
+    # heads_all_pos : attn heads all positions at the same time
+    # heads_last_pos: attn heads last position
+    # full: (resid streams, attn block outs and mlp outs)
+    list_resid_pre_act_patch_results = []
+    for batch in range(batches):
+        base_tokens = batches_base_tokens[batch]
+        src_tokens = batches_src_tokens[batch]
+        base_logits, base_cache = model.run_with_cache(base_tokens)
+        src_logits, _ = model.run_with_cache(src_tokens)
+        
+        metric_fn = partial(metric, yes_id=yes_id, no_id=no_id, CLEAN_BASELINE=CLEAN_BASELINE, CORRUPTED_BASELINE=CORRUPTED_BASELINE)
+        if patching_type=='resid_streams':
+            # resid_pre_act_patch_results -> [n_layers, pos]
+            patch_results = patching.get_act_patch_resid_pre(model, src_tokens, base_cache, metric_fn)
+        elif patching_type=='heads_all_pos':
+            patch_results = patching.get_act_patch_attn_head_out_all_pos(model, src_tokens, base_cache, metric_fn)
+        elif patching_type=='heads_last_pos':
+            # Activation patching per position
+            attn_head_out_per_pos_patch_results = patching.get_act_patch_attn_head_out_by_pos(model, src_tokens, base_cache, metric_fn)
+            # Select last position
+            patch_results = attn_head_out_per_pos_patch_results[:,-1]
+        elif patching_type=='full':
+            patch_results = patching.get_act_patch_block_every(model, src_tokens, base_cache, metric_fn)
+        
+        list_resid_pre_act_patch_results.append(patch_results)
+
+    total_resid_pre_act_patch_results = t.stack(list_resid_pre_act_patch_results, 0).mean(0)
+
+    return total_resid_pre_act_patch_results
+
+def build_numeric_batches(model, dataset, yes_id, no_id, device, batch_size=32):
+    base_toks, src_toks = [], []
+    correct_ids, wrong_ids = [], []
+
+    for clean, corrupt, a, b, label in dataset:
+        base_toks.append(model.to_tokens(clean, prepend_bos=True))
+        src_toks.append(model.to_tokens(corrupt, prepend_bos=True))
+        
+        correct_ids.append(yes_id)
+        wrong_ids.append(no_id)
+
+    max_len = max(seq.shape[-1] for seq in base_toks + src_toks)
+
+    def pad(seq):
+        pad_amount = max_len - seq.shape[-1]
+        if pad_amount > 0:
+            pad_token = model.tokenizer.pad_token_id
+            pad_tensor = t.full((1, pad_amount), pad_token, device=device)
+            return t.cat([seq.to(device), pad_tensor], dim=-1)
+        return seq.to(device)
+
+    base_all = t.cat([pad(x) for x in base_toks], dim=0)
+    src_all = t.cat([pad(x) for x in src_toks], dim=0)
+
+    correct_ids = t.tensor(correct_ids, device=device)
+    wrong_ids = t.tensor(wrong_ids, device=device)
+
+    batches_base, batches_src, batches_ans = [], [], []
+
+    for i in range(0, len(dataset), batch_size):
+        bb = base_all[i:i+batch_size]
+        sb = src_all[i:i+batch_size]
+        ci = correct_ids[i:i+batch_size]
+        wi = wrong_ids[i:i+batch_size]
+
+        ans = t.stack([ci, wi], dim=1)
+        batches_base.append(bb)
+        batches_src.append(sb)
+        batches_ans.append(ans)
+
+    return batches_base, batches_src, batches_ans
+
+def compute_baselines(model, batches_base, batches_src, yes_id, no_id):
+    """
+    Compute baseline logit diff values:
+    - Clean baseline: model confidence for Yes on clean prompts.
+    - Corrupt baseline: model confidence for Yes on corrupt prompts.
+    """
+
+    base_diffs, src_diffs = [], []
+
+    for bb, sb in zip(batches_base, batches_src):
+        base_logits = model(bb)
+        src_logits = model(sb)
+
+        # Extract logits for Yes and No at the last position
+        base_yes = base_logits[:, -1, yes_id]
+        base_no  = base_logits[:, -1, no_id]
+        src_yes  = src_logits[:, -1, yes_id]
+        src_no   = src_logits[:, -1, no_id]
+
+        # Logit difference: Yes - No
+        base_diffs.append(base_yes - base_no)
+        src_diffs.append(src_yes - src_no)
+
+    CLEAN_BASELINE = t.cat(base_diffs).mean()
+    CORRUPTED_BASELINE = t.cat(src_diffs).mean()
+    return CLEAN_BASELINE, CORRUPTED_BASELINE
+
+def numeric_metric(logits, yes_id, no_id, CLEAN_BASELINE, CORRUPTED_BASELINE):
+    """
+    Normalized metric for activation patching:
+    - 1.0 → full rescue (equal to clean baseline)
+    - 0.0 → no rescue (equal to corrupt baseline)
+    - < 0 → anti-causal (worse than corrupt baseline)
+    """
+
+    yes_logits = logits[:, -1, yes_id]
+    no_logits  = logits[:, -1, no_id]
+    ld = yes_logits - no_logits  # logit diff
+
+    normalized = (ld - CORRUPTED_BASELINE) / (CLEAN_BASELINE - CORRUPTED_BASELINE)
+    return normalized.mean()
+
+
+def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patch_heads, output_folder):
+    """
+    Paper-style activation patching visualization using neel_plotly.
+    Saves:
+        - patch_blocks.png (resid+attn+mlp)
+        - patch_heads.png (attn heads)
+    """
+    os.makedirs(output_folder, exist_ok=True)
+
+    num_layers = model.cfg.n_layers
+    num_pos = patch_resid.size(1)
+    num_heads = patch_heads.size(1)
+
+    # Flip layers so final layers are shown at top
+    resid = t.flip(patch_resid, dims=[0])
+    attn = t.flip(patch_attn, dims=[0])
+    mlp = t.flip(patch_mlp, dims=[0])
+    heads = t.flip(patch_heads, dims=[0])
+
+    y_labels = [f"L{L}" for L in range(num_layers - 1, -1, -1)]
+    x_pos = [f"pos {i}" for i in range(num_pos)]
+    x_heads = [f"H{i}" for i in range(num_heads)]
+
+    # ============ LEFT FIGURE (3 components shared) ============
+    stack = t.stack([resid, attn, mlp], dim=0)
+
+    fig_blocks = imshow(
+        stack,
+        facet_col=0,
+        facet_labels=["Residual Stream", "Attn Output", "MLP Output"],
+        y=y_labels,
+        x=x_pos,
+        zmin=-1, zmax=1,
+        color_continuous_scale="RdBu",
+        title="Residual / Attention / MLP Patch Effects",
+        return_fig=True
+    )
+    fig_blocks.update_xaxes(tickangle=45)
+    fig_blocks.update_coloraxes(colorbar=dict(title="Δ Logit Diff"))
+    fig_blocks.show()
+
+    blocks_path = os.path.join(output_folder, "patch_blocks.png")
+    fig_blocks.write_image(blocks_path, scale=3, width=1100, height=600)
+    print(f"Saved: {blocks_path}")
+
+    # ============ RIGHT FIGURE (heads) ============
+    fig_heads = imshow(
+        heads,
+        y=y_labels,
+        x=x_heads,
+        zmin=-1, zmax=1,
+        color_continuous_scale="RdBu",
+        title="Attention Heads Patch Effects (Last Position)",
+        return_fig=True
+    )
+    fig_heads.update_xaxes(tickangle=45)
+    fig_heads.update_coloraxes(colorbar=dict(title="Δ Logit Diff"))
+    fig_heads.show()
+
+    heads_path = os.path.join(output_folder, "patch_heads.png")
+    fig_heads.write_image(heads_path, scale=3, width=700, height=600)
+    print(f"Saved: {heads_path}")
 
 def head_mean_ablation_hook_by_pos(
     z: t.Tensor,
@@ -1138,8 +1401,550 @@ def head_mean_ablation_hook_by_pos(
         head_index_to_ablate: Index of head to ablate
         pos_to_ablate: position to ablate
     """
-
     baseline = z[:, :, head_index_to_ablate, :].mean(dim=(0, 1))
     z[:, pos_to_ablate, head_index_to_ablate, :] = baseline
 
     return z
+def head_zero_ablation_hook_by_pos(
+    z: t.Tensor,
+    hook: HookPoint,
+    head_index_to_ablate: int,
+    pos_to_ablate: int,
+):
+    """
+    Hook function to replace a specific attention head at a specific position with its mean.
+    
+    Args:
+        z: Attention head outputs
+        hook: Hook point object
+        head_index_to_ablate: Index of head to ablate
+        pos_to_ablate: position to ablate
+    """
+    z[:, pos_to_ablate, head_index_to_ablate, :] = 0.0
+
+    return z
+
+
+
+def save_sorted_head_importance(patch_results, output_path="head_importance.csv"):
+    """
+    Takes patch_results from heads_last_pos activation patching:
+    - patch_results shape: [n_layers, n_heads]
+    - Writes a CSV sorted by importance (logit diff improvement)
+    """
+
+    n_layers, n_heads = patch_results.shape
+    data = []
+
+    # Gather head name + score pairs
+    for layer in range(n_layers):
+        for head in range(n_heads):
+            score = patch_results[layer, head].item()
+            head_name = f"Layer{layer}Head{head}"
+            data.append((head_name, score))
+
+    # Create DataFrame and sort by score descending
+    df = pd.DataFrame(data, columns=["Head", "LogitDiff"])
+    df_sorted = df.sort_values(by="LogitDiff", ascending=False)
+
+    # Save
+    df_sorted.to_csv(output_path, index=False)
+    print(f"Saved head ranking to {output_path}")
+
+    return df_sorted
+
+def patch_mlp_neurons(model, layer, batches_base, batches_src, 
+                       numeric_metric, CLEAN_BASELINE, CORRUPTED_BASELINE, 
+                       yes_id, no_id):
+
+    n_neurons = model.cfg.d_mlp 
+    neuron_scores = []
+    counter = 0
+
+    # Iterate over neurons in this layer
+    for neuron_idx in tqdm(range(n_neurons), desc=f"Patching layer {layer}"):
+        scores = []
+
+        # Patch each batch individually then mean-aggregate later
+        for bb, sb in zip(batches_base, batches_src):
+
+            # Get clean activation cache
+            _, clean_cache = model.run_with_cache(bb)
+
+            def hook(activations, hook):
+                activations[:, -1, neuron_idx] = clean_cache[hook.name][:, -1, neuron_idx]
+                return activations
+
+            # Patch only neuron_idx at this layer’s mlp.hook_post
+            logits = model.run_with_hooks(
+                sb,
+                fwd_hooks=[(f"blocks.{layer}.mlp.hook_post", hook)]
+            )
+
+            score = numeric_metric(logits, yes_id, no_id, CLEAN_BASELINE, CORRUPTED_BASELINE)
+            scores.append(score.item())
+
+        neuron_scores.append(np.mean(scores))
+
+    return t.tensor(neuron_scores)
+
+def save_sorted_neuron_importance(neuron_scores, layer, output_csv="neuron_importance_layer.csv"):
+    data = [(f"Layer{layer}Neuron{i}", neuron_scores[i].item()) 
+            for i in range(len(neuron_scores))]
+    df = pd.DataFrame(data, columns=["Neuron", "LogitDiff"])
+    df_sorted = df.sort_values(by="LogitDiff", ascending=False)
+    df_sorted.to_csv(output_csv, index=False)
+    print(f"Saved neuron rankings for L{layer} to {output_csv}")
+    return df_sorted
+
+def plot_neuron_scores(neuron_scores, layer, output_path):
+
+    plt.figure(figsize=(14, 4))
+    x = list(range(len(neuron_scores)))
+    y = neuron_scores.cpu().numpy()
+
+    plt.bar(x, y, width=1.0)
+    plt.xlabel("Neuron")
+    plt.ylabel("Logit Difference")
+    plt.title(f"Neuron Importance in Layer {layer}")
+    plt.grid(True, linestyle="--", alpha=0.4)
+
+    plt.savefig(output_path, bbox_inches='tight', dpi=200)
+    plt.show()
+
+def plot_component_scores(patch_full, model, output_path=None, label="Component Importance"):
+    """
+    Visualize causal contribution from transformer components:
+    X-axis: Embedding, Attn0, MLP0, Attn1, MLP1, ..., AttnN, MLP(N-1)
+    Y-axis: Normalized rescue score (logit difference effect)
+    
+    patch_full: output from compute_act_patching (shape: [batches, layers, components])
+    """
+
+    assert patch_full.ndim == 3, f"Expected 3D tensor [batches, layers, components], got {patch_full.shape}"
+
+    print("📊 patch_full raw shape:", patch_full.shape)
+
+    # 1️⃣ Average over batches
+    patch_avg = patch_full.mean(dim=0)  # → [layers, components]
+    print("📌 After averaging over batches:", patch_avg.shape)
+
+    n_layers = model.cfg.n_layers
+    n_components = patch_avg.shape[1]
+
+    # 2️⃣ We only plot:
+    # index 1 = attention output
+    # index 4 = mlp output
+    # (Verified for Pythia architecture)
+    assert n_components > 4, "Component count too small — full patching data unexpected."
+
+    attn_scores = patch_avg[:, 1]
+    mlp_scores = patch_avg[:, 4]
+
+    # 3️⃣ Construct flattened sequential plot scores
+    flat_scores = [0.0]  # Embedding receives no patch → 0 cause
+    labels = ["Emb"]
+
+    for layer in range(n_layers):
+        labels.append(f"Attn{layer}")
+        flat_scores.append(attn_scores[layer].item())
+
+        labels.append(f"MLP{layer}")
+        flat_scores.append(mlp_scores[layer].item())
+
+    x = np.arange(len(flat_scores))
+
+    # 4️⃣ Plot
+    plt.figure(figsize=(18, 6))
+    plt.plot(x, flat_scores, '-o', markersize=7, linewidth=2,
+             label=label)
+
+    plt.xticks(x, labels, rotation=75, ha='right')
+    plt.ylabel("Logit Difference")
+    plt.xlabel("Model Component")
+    plt.title("Average Causal Contribution of Transformer Components")
+    plt.grid(True, linestyle='--', alpha=0.4)
+
+    if output_path:
+        plt.savefig(output_path, bbox_inches='tight', dpi=200)
+        print(f"💾 Saved component-level plot to {output_path}")
+
+    plt.show()
+    
+def get_head_output(cache, model, layer, head, pos):
+    d_head = model.cfg.d_head
+    n_heads = model.cfg.n_heads
+
+    # Best: hook_result is head-separated value output pre-W_O
+    key = f"blocks.{layer}.attn.hook_result"
+    if key in cache:
+        res = cache[key]
+        if res.ndim == 4 and res.shape[2] == n_heads:
+            return res[:, pos, head, :]   # [batch, d_head]
+
+    # Backup: GPT-2 unmixed (already [batch, seq, head, d_head])
+    key = f"blocks.{layer}.attn.h_out"
+    if key in cache:
+        return cache[key][:, pos, head, :]
+
+    # Last resort: mixed output, unmix via W_O
+    for key in (
+        f"blocks.{layer}.hook_attn_out",
+        f"blocks.{layer}.attn.hook_attn_out",
+        f"blocks.{layer}.attn.out"
+    ):
+        if key in cache:
+            attn_out = cache[key][:, pos, :]  # [batch, d_model]
+            W_O = model.blocks[layer].attn.W_O  # [d_model, d_head*n_heads]
+            start = head * d_head
+            end = (head + 1) * d_head
+            return attn_out @ W_O[:, start:end]
+
+    raise KeyError(f"No attention value output found for layer {layer}.")
+
+def plot_head_to_neuron_dot_products(
+    model,
+    batches_base,
+    batches_src,
+    Lh, #attention layer
+    H,  #attention head
+    Lm, #MLP layer
+    N,  #Neuron index
+    title=None,
+    save_path=None
+):
+    """
+    Computes dot(head_out_last_pos, MLP_neuron_w_out) and plots group boxplots
+    comparing clean vs corrupt datasets.
+    """
+
+    # Lists storing dot products across full dataset
+    clean_values = []
+    corrupt_values = []
+    
+    # Output weights of the MLP neuron
+    W_out_param = model.blocks[Lm].mlp.W_out
+
+    # Case A: W_out is a Parameter (e.g. Pythia)
+    if isinstance(W_out_param, t.nn.Parameter) or isinstance(W_out_param, t.Tensor):
+        W = W_out_param
+
+    # Case B: W_out is a Linear module (e.g. GPT-2)
+    elif hasattr(W_out_param, "weight"):
+        W = W_out_param.weight
+    else:
+        raise ValueError(f"Cannot find W_out weights. Got type: {type(W_out_param)}")
+
+    # Now handle either shape [d_model, d_mlp] or [d_mlp, d_model]
+    if W.shape[0] == model.cfg.d_mlp:  # Pythia style: [2048, 512]
+        neuron_w_out = W[N, :]         # correct neuron row
+    elif W.shape[1] == model.cfg.d_mlp:  # GPT-2 style: [512, 2048]
+        neuron_w_out = W[:, N]
+    else:
+        raise ValueError(f"Unexpected W_out shape: {W.shape}")
+    
+    last_pos = -1  # final token
+    
+    for bb, sb in zip(batches_base, batches_src):
+        # Forward passes with cache
+        _, clean_cache = model.run_with_cache(bb)
+        _, corrupt_cache = model.run_with_cache(sb)
+
+        # Head output of chosen head
+        clean_head = get_head_output(clean_cache, model, Lh, H, last_pos)
+        corrupt_head = get_head_output(corrupt_cache, model, Lh, H, last_pos)
+
+        # Dot products
+        clean_values.extend((clean_head @ neuron_w_out).detach().cpu().tolist())
+        corrupt_values.extend((corrupt_head @ neuron_w_out).detach().cpu().tolist())
+    
+    # Build DataFrame for seaborn
+    df = pd.DataFrame({
+        "Value": clean_values + corrupt_values,
+        "Condition": ["Clean (a>b → Yes)"] * len(clean_values) +
+                     ["Corrupt (b>a → No)"] * len(corrupt_values)
+    })
+
+    # Plot
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(data=df, x="Condition", y="Value", palette=["#88c999", "#c17c74"])
+    sns.stripplot(data=df, x="Condition", y="Value", color="black", alpha=0.2)
+
+    plt.ylabel(f"Attn(L{Lh},H{H}) · W_out(L{Lm},N{N})")
+    plt.xlabel("Condition")
+    if title is not None:
+        plt.title(title)
+    plt.grid(axis="y", linestyle="--", alpha=0.4)
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Saved plot to {save_path}")
+    plt.show()
+
+    return df
+
+def plot_head_PCA(
+    model,
+    batches_base,
+    batches_src,
+    layer: int,
+    head: int,
+    title=None,
+    save_path=None,
+    max_points=600,
+):
+
+    import torch as t
+    import numpy as np
+    from sklearn.decomposition import PCA
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    clean_outputs = []
+    corrupt_outputs = []
+
+    last_pos = -1
+
+    hook_name = f"blocks.{layer}.attn.hook_z"
+
+    with t.no_grad():
+        for bb, sb in zip(batches_base, batches_src):
+
+            # ---- clean ----
+            _, clean_cache = model.run_with_cache(
+                bb,
+                names_filter=hook_name
+            )
+
+            # shape: [batch, seq, heads, d_head]
+            clean_z = clean_cache[hook_name][:, last_pos, head, :]
+            clean_outputs.append(clean_z.cpu())
+
+            del clean_cache
+            t.cuda.empty_cache()
+
+            # ---- corrupt ----
+            _, corrupt_cache = model.run_with_cache(
+                sb,
+                names_filter=hook_name
+            )
+
+            corrupt_z = corrupt_cache[hook_name][:, last_pos, head, :]
+            corrupt_outputs.append(corrupt_z.cpu())
+
+            del corrupt_cache
+            t.cuda.empty_cache()
+
+            # early stop once we have enough points
+            if sum(x.shape[0] for x in clean_outputs) >= max_points:
+                break
+
+    # Stack on CPU
+    clean_mat = t.cat(clean_outputs, dim=0)[:max_points].numpy()
+    corrupt_mat = t.cat(corrupt_outputs, dim=0)[:max_points].numpy()
+
+    X = np.vstack([clean_mat, corrupt_mat])
+    y = np.array([1]*len(clean_mat) + [0]*len(corrupt_mat))
+
+    # PCA (CPU)
+    pca = PCA(n_components=2)
+    pcs = pca.fit_transform(X)
+
+    df = pd.DataFrame({
+        "PC1": pcs[:, 0],
+        "PC2": pcs[:, 1],
+        "Class": np.where(y == 1, "Greater (a>b)", "Less (b>a)")
+    })
+
+    plt.figure(figsize=(8, 6))
+    sns.scatterplot(
+        data=df,
+        x="PC1",
+        y="PC2",
+        hue="Class",
+        s=40,
+        alpha=0.8
+    )
+
+    plt.title(title or f"PCA of Layer {layer}, Head {head}")
+    plt.grid(alpha=0.3)
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    plt.show()
+
+    return df
+
+import torch as t
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def plot_activation_steering(
+    model,
+    batches_base,
+    batches_src,
+    yes_id,
+    no_id,
+    layer,
+    head,
+    alpha,
+    device,
+    save_path=None,
+    pos=-1,
+    max_points=2000,
+):
+    """
+    Figure-7-style activation steering using PC1 of attention head outputs.
+    Steering is applied in HEAD SPACE via attn.hook_z.
+    """
+
+    import torch
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from sklearn.decomposition import PCA
+
+    hook_z = f"blocks.{layer}.attn.hook_z"
+
+    # ------------------------------------------------------------
+    # 1. Collect head activations (CPU, minimal cache)
+    # ------------------------------------------------------------
+    clean_acts = []
+    corrupt_acts = []
+
+    def collect_acts(batches, store):
+        with torch.no_grad():
+            for batch in batches:
+                batch = batch.to(device)
+
+                _, cache = model.run_with_cache(
+                    batch,
+                    names_filter=hook_z
+                )
+
+                # [batch, seq, heads, d_head] → [batch, d_head]
+                z = cache[hook_z][:, pos, head, :].cpu()
+                store.append(z)
+
+                del cache
+                torch.cuda.empty_cache()
+
+                if sum(x.shape[0] for x in store) >= max_points:
+                    break
+
+    collect_acts(batches_base, clean_acts)
+    collect_acts(batches_src, corrupt_acts)
+
+    clean_X = torch.cat(clean_acts, dim=0)[:max_points]
+    corrupt_X = torch.cat(corrupt_acts, dim=0)[:max_points]
+
+    X = torch.cat([clean_X, corrupt_X], dim=0).numpy()
+
+    # ------------------------------------------------------------
+    # 2. PCA on CPU (PC1 in head space)
+    # ------------------------------------------------------------
+    pca = PCA(n_components=1)
+    pca.fit(X)
+
+    pc1 = torch.tensor(
+        pca.components_[0],
+        device=device,
+        dtype=torch.float32
+    )
+    pc1 = pc1 / pc1.norm()
+
+    # ------------------------------------------------------------
+    # 3. Logit difference helper
+    # ------------------------------------------------------------
+    def logit_diff(logits):
+        return (logits[:, -1, yes_id] - logits[:, -1, no_id]).detach().cpu()
+
+    # ------------------------------------------------------------
+    # 4. Steering hook (HEAD SPACE)
+    # ------------------------------------------------------------
+    def make_steering_hook(pc1, alpha, head, pos, sign):
+        def hook(z, hook):
+            # z: [batch, seq, heads, d_head]
+            z[:, pos, head, :] += sign * alpha * pc1
+            return z
+        return hook
+
+    # ------------------------------------------------------------
+    # 5. Run batches with / without steering
+    # ------------------------------------------------------------
+    def run_batches(batches, steer=False, sign=+1):
+        diffs = []
+
+        with torch.no_grad():
+            for batch in batches:
+                batch = batch.to(device)
+
+                if not steer:
+                    logits = model(batch)
+                else:
+                    with model.hooks(
+                        fwd_hooks=[
+                            (
+                                hook_z,
+                                make_steering_hook(pc1, alpha, head, pos, sign),
+                            )
+                        ]
+                    ):
+                        logits = model(batch)
+
+                diffs.append(logit_diff(logits))
+
+        return torch.cat(diffs).numpy()
+
+    clean_before = run_batches(batches_base, steer=False)
+    clean_after  = run_batches(batches_base, steer=True, sign=1)
+
+    corrupt_before = run_batches(batches_src, steer=False)
+    corrupt_after  = run_batches(batches_src, steer=True, sign=-1)
+
+    # ------------------------------------------------------------
+    # 6. Statistics
+    # ------------------------------------------------------------
+    means = [
+        clean_before.mean(),
+        clean_after.mean(),
+        corrupt_before.mean(),
+        corrupt_after.mean(),
+    ]
+
+    sems = [
+        clean_before.std() / np.sqrt(len(clean_before)),
+        clean_after.std() / np.sqrt(len(clean_after)),
+        corrupt_before.std() / np.sqrt(len(corrupt_before)),
+        corrupt_after.std() / np.sqrt(len(corrupt_after)),
+    ]
+
+    # ------------------------------------------------------------
+    # 7. Plot (Figure-7 style)
+    # ------------------------------------------------------------
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
+
+    axes[0].bar(["Before", "After"], means[:2], yerr=sems[:2], capsize=5)
+    axes[0].set_title("a > b")
+    axes[0].set_ylabel("Logit Difference (Yes − No)")
+
+    axes[1].bar(["Before", "After"], means[2:], yerr=sems[2:], capsize=5)
+    axes[1].set_title("b > a")
+
+    fig.suptitle(
+        f"PCA Steering — L{layer}H{head}, α={alpha}, pos={pos}",
+        fontsize=12,
+    )
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    plt.show()
+
+    return pc1
+
+

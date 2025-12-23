@@ -39,10 +39,27 @@ from .Functions import (
     get_last_pos,
     load_or_generate_parquet,
     head_mean_ablation_hook_by_pos,
+    head_zero_ablation_hook_by_pos,
     run_patching,
     plot_attention_head_heatmap,
     plot_mlp_patch_bar,
-    plot_resid_patch_bar
+    plot_resid_patch_bar,
+    plot_all_patch_effects,
+    compute_act_patching,
+    get_logit_diff,
+    paper_plot,
+    build_numeric_batches,
+    compute_baselines,
+    numeric_metric,
+    plot_all_patch_effects_paper,
+    save_sorted_head_importance,
+    patch_mlp_neurons,
+    save_sorted_neuron_importance,
+    plot_neuron_scores,
+    plot_component_scores,
+    plot_head_to_neuron_dot_products,
+    plot_head_PCA,
+    plot_activation_steering
 )
 
 # Version information
@@ -67,5 +84,6 @@ __all__ = [
     "visualize_ablation",
     "run_model_with_induction_analysis",
     "run_model_with_ablation_analysis",
-    "head_mean_ablation_hook_by_pos"
+    "head_mean_ablation_hook_by_pos",
+    "head_zero_ablation_hook_by_pos",
 ]

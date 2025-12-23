@@ -1,3 +1,4 @@
+#%%
 from huggingface_hub import login
 
 import pandas as pd
@@ -13,13 +14,14 @@ from tl_eval.lm_evaluator import *
 load_dotenv()
 hf_api = os.getenv("HUGGINGFACE_KEY")
 login(token=hf_api)
+#%%
 
 def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_head="",ablated_pos=""):
     torch.cuda.empty_cache()
     current_dir = os.path.dirname(os.path.abspath(__file__))
 
     output_dir = os.path.abspath(
-        os.path.join(current_dir, "dataruns", "benchmarks", "ablation")
+        os.path.join(current_dir, "dataruns", "benchmarks")
     )
 
     tasks_dir = os.path.join(current_dir, "../test_suite/tasks")
@@ -95,8 +97,7 @@ def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_he
 
     file_name = os.path.join(
         output_dir,
-        ablated_head,
-        task_name,
+        model_name_str,
         f"accuracy_eval_{model_name_str}_{ablated_head}_{ablated_pos}_{task_name}_{num_fewshot}shot_RUN{run}.csv",
     )
 
@@ -105,3 +106,6 @@ def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_he
 
     print(f"Results saved in {file_name}")
     return df
+
+
+#%%

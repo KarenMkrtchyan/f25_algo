@@ -50,6 +50,10 @@ from .model_config import (
 
 from .models import PythiaModel
 
+from .device_utils import (
+    get_device
+)
+
 # Version information
 __version__ = "1.0.0"
 

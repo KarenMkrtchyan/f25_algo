@@ -1,4 +1,3 @@
-
 # %%
 
 import torch as t
@@ -15,6 +14,7 @@ from jaxtyping import Float, Int
 from collections import defaultdict
 import einops
 import re
+import plotly.express as px
 
 # %%
 
@@ -916,3 +916,132 @@ def act_patch(
         node_name: t.tensor(results).reshape(list(patching_nodes.shape_values[node_name].values())) if isinstance(results[0], float) else results
         for node_name, results in results_dict.items()
     }
+
+def imshow(tensor, renderer=None, **kwargs):
+    update_layout_set = {
+    "xaxis_range", "yaxis_range", "hovermode", "xaxis_title", "yaxis_title", "colorbar", "colorscale", "coloraxis", "title_x", "bargap", "bargroupgap", "xaxis_tickformat",
+    "yaxis_tickformat", "title_y", "legend_title_text", "xaxis_showgrid", "xaxis_gridwidth", "xaxis_gridcolor", "yaxis_showgrid", "yaxis_gridwidth", "yaxis_gridcolor",
+    "showlegend", "xaxis_tickmode", "yaxis_tickmode", "xaxis_tickangle", "yaxis_tickangle", "margin", "xaxis_visible", "yaxis_visible", "bargap", "bargroupgap"
+    }
+    kwargs_post = {k: v for k, v in kwargs.items() if k in update_layout_set}
+    kwargs_pre = {k: v for k, v in kwargs.items() if k not in update_layout_set}
+    facet_labels = kwargs_pre.pop("facet_labels", None)
+    border = kwargs_pre.pop("border", False)
+    if "color_continuous_scale" not in kwargs_pre:
+        kwargs_pre["color_continuous_scale"] = "RdBu"
+    if "margin" in kwargs_post and isinstance(kwargs_post["margin"], int):
+        kwargs_post["margin"] = dict.fromkeys(list("tblr"), kwargs_post["margin"])
+    fig = px.imshow(utils.to_numpy(tensor), color_continuous_midpoint=0.0, **kwargs_pre)
+    if facet_labels:
+        for i, label in enumerate(facet_labels):
+            fig.layout.annotations[i]['text'] = label
+    if border:
+        fig.update_xaxes(showline=True, linewidth=1, linecolor='black', mirror=True)
+        fig.update_yaxes(showline=True, linewidth=1, linecolor='black', mirror=True)
+    # things like `xaxis_tickmode` should be applied to all subplots. This is super janky lol but I'm under time pressure
+    for setting in ["tickangle"]:
+      if f"xaxis_{setting}" in kwargs_post:
+          i = 2
+          while f"xaxis{i}" in fig["layout"]:
+            kwargs_post[f"xaxis{i}_{setting}"] = kwargs_post[f"xaxis_{setting}"]
+            i += 1
+    fig.update_layout(**kwargs_post)
+    fig.show(renderer=renderer)
+
+def hist(tensor, renderer=None, **kwargs):
+    update_layout_set = {
+    "xaxis_range", "yaxis_range", "hovermode", "xaxis_title", "yaxis_title", "colorbar", "colorscale", "coloraxis", "title_x", "bargap", "bargroupgap", "xaxis_tickformat",
+    "yaxis_tickformat", "title_y", "legend_title_text", "xaxis_showgrid", "xaxis_gridwidth", "xaxis_gridcolor", "yaxis_showgrid", "yaxis_gridwidth", "yaxis_gridcolor",
+    "showlegend", "xaxis_tickmode", "yaxis_tickmode", "xaxis_tickangle", "yaxis_tickangle", "margin", "xaxis_visible", "yaxis_visible", "bargap", "bargroupgap"
+    }
+    kwargs_post = {k: v for k, v in kwargs.items() if k in update_layout_set}
+    kwargs_pre = {k: v for k, v in kwargs.items() if k not in update_layout_set}
+    names = kwargs_pre.pop("names", None)
+    if "barmode" not in kwargs_post:
+        kwargs_post["barmode"] = "overlay"
+    if "bargap" not in kwargs_post:
+        kwargs_post["bargap"] = 0.0
+    if "margin" in kwargs_post and isinstance(kwargs_post["margin"], int):
+        kwargs_post["margin"] = dict.fromkeys(list("tblr"), kwargs_post["margin"])
+    fig = px.histogram(x=tensor, **kwargs_pre).update_layout(**kwargs_post)
+    if names is not None:
+        for i in range(len(fig.data)):
+            fig.data[i]["name"] = names[i // 2]
+    fig.show(renderer)
+
+
+def path_patch_sender_to_receiver_logits(
+    model, 
+    clean_tokens, 
+    corrupted_tokens, 
+    sender_head,
+    receiver_head,
+    metric,
+):
+    """
+    Measures the effect of the sender to receiver path on the final metric.
+    
+    Getting baseline corrupted logits, patching sender to clean and measuring receiver's output change.
+    Patching that receiver change forward to get new logits and computing metric on the patched logits.
+    """
+    s_layer, s_head_idx = sender_head
+    r_layer, r_head_idx = receiver_head
+    
+    if s_layer >= r_layer:
+        raise ValueError(f"Sender layer {s_layer} must be before receiver layer {r_layer}")
+    
+    model.reset_hooks()
+    
+    with t.no_grad():
+        _, corrupted_cache = model.run_with_cache(corrupted_tokens)
+    corrupted_receiver_z = corrupted_cache[utils.get_act_name("z", r_layer)][:, :, r_head_idx, :].clone()
+    
+    with t.no_grad():
+        _, clean_cache = model.run_with_cache(
+            clean_tokens,
+            names_filter=lambda name: name == utils.get_act_name("z", s_layer)
+        )
+    clean_sender_z = clean_cache[utils.get_act_name("z", s_layer)][:, :, s_head_idx, :].clone()
+    
+    def sender_patch_and_freeze_hook(z, hook):
+        # Freeze to corrupted by default
+        z_new = corrupted_cache[hook.name].clone()
+        
+        if hook.layer() == s_layer:
+            z_new[:, :, s_head_idx, :] = clean_sender_z
+        
+        return z_new
+    
+    for layer in range(s_layer, r_layer):
+        model.add_hook(
+            utils.get_act_name("z", layer),
+            sender_patch_and_freeze_hook
+        )
+    
+    with t.no_grad():
+        _, patched_cache = model.run_with_cache(
+            corrupted_tokens,
+            names_filter=lambda name: name == utils.get_act_name("z", r_layer)
+        )
+    patched_receiver_z = patched_cache[utils.get_act_name("z", r_layer)][:, :, r_head_idx, :].clone()
+    
+    model.reset_hooks()
+    
+    receiver_diff = patched_receiver_z - corrupted_receiver_z
+    
+    # Patch this difference forward to get final logits
+    def receiver_patch_hook(z, hook):
+        z[:, :, r_head_idx, :] = corrupted_receiver_z + receiver_diff
+        return z
+    
+    model.add_hook(
+        utils.get_act_name("z", r_layer),
+        receiver_patch_hook
+    )
+    
+    with t.no_grad():
+        patched_logits = model(corrupted_tokens)
+    
+    model.reset_hooks()
+    
+    return metric(patched_logits)
