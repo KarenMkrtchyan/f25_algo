@@ -13,10 +13,10 @@ from Interpretability import build_dataset, compute_act_patching, get_logit_diff
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
-dataset = build_dataset(n=100, low=10, high=99)
+dataset = build_dataset(n=100, low=1000, high=9999)
 
-model_name = "pythia-70m"
-#model_name = "qwen2.5-3b"
+#model_name = "pythia-70m"
+model_name = "qwen2.5-3b"
 model = load_model(model_name)
 device = get_device()
 
@@ -59,15 +59,14 @@ print(patch_full.shape)
 print("Activation patching complete!")
 print("\n")
 
-tokens_str = model.to_str_tokens(model.to_tokens("Is 43 > 21? Answer:"))
+tokens_str = model.to_str_tokens(model.to_tokens("Is 5678 > 1234? Answer:"))
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
-digit_folder = os.path.join(display_folder, "2digit")
+digit_folder = os.path.join(display_folder, "4digit")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
 csv_path = os.path.join(output_folder, "head_importance.csv")
-component_plot_path = os.path.join(output_folder, "component_relevance.png")
-extra_path = os.path.join(output_folder, "component_RRelevance.png")
+component_plot_path = os.path.join(output_folder, "component_relevancy.png")
 
 save_sorted_head_importance(patch_heads, csv_path)
 plot_all_patch_effects_paper(
@@ -78,5 +77,5 @@ plot_all_patch_effects_paper(
     patch_heads,
     output_folder
 )
-plot_component_scores(patch_full, model, component_plot_path)
-plot_component_scores_lastpos(patch_full, model, extra_path)
+#plot_component_scores(patch_full, model, component_plot_path)
+plot_component_scores_lastpos(patch_full, model, component_plot_path)
