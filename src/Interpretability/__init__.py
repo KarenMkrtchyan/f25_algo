@@ -59,7 +59,8 @@ from .Functions import (
     plot_component_scores,
     plot_head_to_neuron_dot_products,
     plot_head_PCA,
-    plot_activation_steering
+    plot_activation_steering,
+    plot_component_scores_lastpos
 )
 
 # Version information

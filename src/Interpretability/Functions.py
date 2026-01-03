@@ -1570,6 +1570,51 @@ def plot_component_scores(patch_full, model, output_path=None, label="Component 
         print(f"💾 Saved component-level plot to {output_path}")
 
     plt.show()
+
+def plot_component_scores_lastpos(patch_full, model, output_path=None, label="Component Importance"):
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    assert patch_full.ndim == 3, f"Expected 3D tensor [components, layers, positions], got {patch_full.shape}"
+    print("📊 patch_full raw shape:", patch_full.shape)
+
+    patch_lastpos = patch_full[:, :, -1]  # [components, layers]
+    patch_lastpos = patch_lastpos.T       # [layers, components]
+
+    n_layers, n_components = patch_lastpos.shape
+    print(f"Layers: {n_layers}, Components: {n_components}")
+
+    # Safe labels: only 3 components
+    COMPONENT_NAMES = ["Resid/Emb", "Attn", "MLP"]
+    if n_components > len(COMPONENT_NAMES):
+        COMPONENT_NAMES += [f"Comp{i}" for i in range(len(COMPONENT_NAMES) - 1, n_components)]
+
+    flat_scores = [0.0]  # embedding baseline
+    labels = ["Emb"]
+
+    for layer in range(n_layers):
+        for comp_idx in range(n_components):
+            labels.append(f"{COMPONENT_NAMES[comp_idx]}{layer}")
+            flat_scores.append(patch_lastpos[layer, comp_idx].item())
+
+    x = np.arange(len(flat_scores))
+
+    plt.figure(figsize=(18, 6))
+    plt.plot(x, flat_scores, '-o', markersize=7, linewidth=2, label=label)
+    plt.xticks(x, labels, rotation=75, ha='right')
+    plt.ylabel("Δ Logit Difference (last position)")
+    plt.xlabel("Model Component")
+    plt.title("Causal Contribution of Transformer Components (Last Position)")
+    plt.grid(True, linestyle='--', alpha=0.4)
+    plt.legend()
+
+    if output_path:
+        plt.savefig(output_path, bbox_inches='tight', dpi=200)
+        print(f"💾 Saved component-level plot to {output_path}")
+
+    plt.show()
+
+
     
 def get_head_output(cache, model, layer, head, pos):
     d_head = model.cfg.d_head

@@ -9,14 +9,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from utils.model_config import load_model
 from utils.device_utils import get_device
-from Interpretability import build_dataset, compute_act_patching, get_logit_diff, paper_plot, build_numeric_batches, compute_baselines, numeric_metric, plot_all_patch_effects_paper, save_sorted_head_importance, plot_component_scores
+from Interpretability import build_dataset, compute_act_patching, get_logit_diff, paper_plot, build_numeric_batches, compute_baselines, numeric_metric, plot_all_patch_effects_paper, save_sorted_head_importance, plot_component_scores, plot_component_scores_lastpos
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
 dataset = build_dataset(n=100, low=10, high=99)
 
-#model_name = "pythia-70m"
-model_name = "qwen2.5-3b"
+model_name = "pythia-70m"
+#model_name = "qwen2.5-3b"
 model = load_model(model_name)
 device = get_device()
 
@@ -48,6 +48,10 @@ patch_full = compute_act_patching(
     batches_base, batches_src, num_batches
 )
 
+print("patch_full shape:", patch_full.shape)
+print("patch_full[0].shape:", patch_full[0].shape)
+print("patch_full[:, 0].shape:", patch_full[:, 0].shape)
+
 patch_attn = patch_full[1]
 patch_mlp  = patch_full[2]
 print(patch_full.shape)
@@ -63,6 +67,7 @@ output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
 csv_path = os.path.join(output_folder, "head_importance.csv")
 component_plot_path = os.path.join(output_folder, "component_relevance.png")
+extra_path = os.path.join(output_folder, "component_RRelevance.png")
 
 save_sorted_head_importance(patch_heads, csv_path)
 plot_all_patch_effects_paper(
@@ -74,3 +79,4 @@ plot_all_patch_effects_paper(
     output_folder
 )
 plot_component_scores(patch_full, model, component_plot_path)
+plot_component_scores_lastpos(patch_full, model, extra_path)
