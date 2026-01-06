@@ -419,6 +419,11 @@ def visualize_neuron_activation(cache, model, str_tokens, max_k: int = 7):
 
     return text_vis, topk_vis, neuron_activations_for_all_layers, neuron_activations_for_all_layers_rearranged
 
+def get_shared_ylim(df1, df2, pad_frac=0.1):
+    lo = min(df1["logit"].min(), df2["logit"].min())
+    hi = max(df1["logit"].max(), df2["logit"].max())
+    pad = pad_frac * (hi - lo)
+    return lo - pad, hi + pad
 
 def display_attention_heads(model, text_or_tokens, cache, layer=0, position=0):
     """
@@ -1846,6 +1851,55 @@ import torch as t
 import numpy as np
 import matplotlib.pyplot as plt
 
+def average_logit_tracking(
+    model,
+    dataset,
+    target_tokens,
+    token_position=-1,
+    max_examples=None,
+):
+    """
+    Computes average pseudo-logits across the dataset for clean and corrupt prompts.
+
+    Returns:
+        df_clean_avg, df_corrupt_avg
+        Each has columns [layer, token, logit]
+    """
+    clean_dfs = []
+    corrupt_dfs = []
+
+    iterator = dataset if max_examples is None else dataset[:max_examples]
+
+    for clean_text, corrupt_text, _, _, _ in tqdm(iterator, desc="Averaging logit lens"):
+        df_clean = track_tokens_df(
+            model,
+            clean_text,
+            target_tokens,
+            token_position
+        )
+        df_corrupt = track_tokens_df(
+            model,
+            corrupt_text,
+            target_tokens,
+            token_position
+        )
+
+        clean_dfs.append(df_clean)
+        corrupt_dfs.append(df_corrupt)
+
+    df_clean_avg = (
+        pd.concat(clean_dfs)
+          .groupby(["layer", "token"], as_index=False)["logit"]
+          .mean()
+    )
+
+    df_corrupt_avg = (
+        pd.concat(corrupt_dfs)
+          .groupby(["layer", "token"], as_index=False)["logit"]
+          .mean()
+    )
+
+    return df_clean_avg, df_corrupt_avg
 
 def plot_activation_steering(
     model,

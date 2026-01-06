@@ -60,7 +60,9 @@ from .Functions import (
     plot_head_to_neuron_dot_products,
     plot_head_PCA,
     plot_activation_steering,
-    plot_component_scores_lastpos
+    plot_component_scores_lastpos,
+    average_logit_tracking,
+    get_shared_ylim
 )
 
 # Version information
