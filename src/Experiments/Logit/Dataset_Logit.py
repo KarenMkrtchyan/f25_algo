@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from utils.model_config import load_model
 from utils.device_utils import get_device
-from Interpretability import build_dataset, average_logit_tracking, plot_token_logits, get_shared_ylim
+from Interpretability import build_dataset, average_logit_tracking, plot_token_logits, get_shared_ylim, ablate_attn_head_last_pos, make_ablated_model
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
@@ -22,8 +22,36 @@ device = get_device()
 
 candidate_tokens = [" Yes", " No"]
 
+layer = 24
+head  = 7
+
+class AblatedModel:
+    def __init__(self, model, layer, head):
+        self.model = model
+        self.layer = layer
+        self.head = head
+
+        self.hook = (
+            f"blocks.{layer}.attn.hook_result",
+            self._ablation_hook,
+        )
+
+    def _ablation_hook(self, attn_result, hook):
+        attn_result[:, -1, self.head, :] = 0.0
+        return attn_result
+
+    def __call__(self, *args, **kwargs):
+        with self.model.hooks(fwd_hooks=[self.hook]):
+            return self.model(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.model, name)
+
+
+ablated_model = AblatedModel(model, layer, head)
+
 df_clean_avg, df_corrupt_avg = average_logit_tracking(
-    model=model,
+    model=ablated_model,
     dataset=dataset,
     target_tokens=candidate_tokens,
     token_position=-1,
@@ -35,10 +63,10 @@ display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "Logit_Tracking")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
-clean_path_csv = os.path.join(output_folder, "clean_prompts.csv")
-clean_path_png = os.path.join(output_folder, "clean_prompts.png")
-corrupt_path_csv = os.path.join(output_folder, "corrupt_prompts.csv")
-corrupt_path_png = os.path.join(output_folder, "corrupt_prompts.png")
+clean_path_csv = os.path.join(output_folder, f"clean_prompts_ablated_L{layer}H{head}.csv")
+clean_path_png = os.path.join(output_folder, f"clean_prompts_ablated_L{layer}H{head}.png")
+corrupt_path_csv = os.path.join(output_folder, f"corrupt_prompts_ablated_L{layer}H{head}.csv")
+corrupt_path_png = os.path.join(output_folder, f"corrupt_prompts_ablated_L{layer}H{head}.png")
 
 ylim = get_shared_ylim(df_clean_avg, df_corrupt_avg)
 

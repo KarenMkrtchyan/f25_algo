@@ -62,7 +62,9 @@ from .Functions import (
     plot_activation_steering,
     plot_component_scores_lastpos,
     average_logit_tracking,
-    get_shared_ylim
+    get_shared_ylim,
+    ablate_attn_head_last_pos,
+    make_ablated_model
 )
 
 # Version information

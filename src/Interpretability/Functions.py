@@ -334,6 +334,26 @@ def run_model_with_induction_analysis(
         "n_heads": model.cfg.n_heads
     }
 
+def ablate_attn_head_last_pos(layer, head):
+    def hook(attn_result, hook):
+        # attn_result: [batch, pos, head, d_head]
+        attn_result[:, -1, head, :] = 0.0
+        return attn_result
+    return hook
+
+def make_ablated_model(model, layer, head):
+    hook = (
+        f"blocks.{layer}.attn.hook_result",
+        ablate_attn_head_last_pos(layer, head),
+    )
+
+    def ablated_forward(tokens, **kwargs):
+        with model.hooks(fwd_hooks=[hook]):
+            return model(tokens, **kwargs)
+
+    return ablated_forward
+
+
 def run_model_with_ablation_analysis(
     model: HookedTransformer,
     text: str,
