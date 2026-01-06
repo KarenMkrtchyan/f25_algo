@@ -23,13 +23,14 @@ device = get_device()
 candidate_tokens = [" Yes", " No"]
 
 layer = 24
-head  = 7
+head  = 5
 
 class AblatedModel:
-    def __init__(self, model, layer, head):
+    def __init__(self, model, layer, head, pos=None):
         self.model = model
         self.layer = layer
         self.head = head
+        self.pos = pos
 
         self.hook = (
             f"blocks.{layer}.attn.hook_result",
@@ -37,7 +38,10 @@ class AblatedModel:
         )
 
     def _ablation_hook(self, attn_result, hook):
-        attn_result[:, -1, self.head, :] = 0.0
+        if self.pos is None:
+            attn_result[:, :, self.head, :] = 0.0
+        else:
+            attn_result[:, self.pos, self.head, :] = 0.0
         return attn_result
 
     def __call__(self, *args, **kwargs):
@@ -46,7 +50,6 @@ class AblatedModel:
 
     def __getattr__(self, name):
         return getattr(self.model, name)
-
 
 ablated_model = AblatedModel(model, layer, head)
 
@@ -63,10 +66,10 @@ display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "Logit_Tracking")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
-clean_path_csv = os.path.join(output_folder, f"clean_prompts_ablated_L{layer}H{head}.csv")
-clean_path_png = os.path.join(output_folder, f"clean_prompts_ablated_L{layer}H{head}.png")
-corrupt_path_csv = os.path.join(output_folder, f"corrupt_prompts_ablated_L{layer}H{head}.csv")
-corrupt_path_png = os.path.join(output_folder, f"corrupt_prompts_ablated_L{layer}H{head}.png")
+clean_path_csv = os.path.join(output_folder, f"clean_prompts_ablated_L{layer}H{head}_all_pos.csv")
+clean_path_png = os.path.join(output_folder, f"clean_prompts_ablated_L{layer}H{head}_all_pos.png")
+corrupt_path_csv = os.path.join(output_folder, f"corrupt_prompts_ablated_L{layer}H{head}_all_pos.csv")
+corrupt_path_png = os.path.join(output_folder, f"corrupt_prompts_ablated_L{layer}H{head}_all_pos.png")
 
 ylim = get_shared_ylim(df_clean_avg, df_corrupt_avg)
 
