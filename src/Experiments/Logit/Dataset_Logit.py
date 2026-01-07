@@ -4,6 +4,7 @@ import sys
 import torch as t
 import numpy as np
 from tqdm import tqdm
+from collections import defaultdict
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
@@ -22,36 +23,40 @@ device = get_device()
 
 candidate_tokens = [" Yes", " No"]
 
-layer = 24
-head  = 5
-
-class AblatedModel:
-    def __init__(self, model, layer, head, pos=None):
+class MultiHeadAblatedModel:
+    def __init__(self, model, heads_to_ablate):
+        """
+        heads_to_ablate: list of (layer, head) tuples
+        e.g. [(24,5), (24,7), (26,1)]
+        """
         self.model = model
-        self.layer = layer
-        self.head = head
-        self.pos = pos
 
-        self.hook = (
-            f"blocks.{layer}.attn.hook_result",
-            self._ablation_hook,
-        )
+        self.layer_to_heads = defaultdict(list)
+        for layer, head in heads_to_ablate:
+            self.layer_to_heads[layer].append(head)
 
-    def _ablation_hook(self, attn_result, hook):
-        if self.pos is None:
-            attn_result[:, :, self.head, :] = 0.0
-        else:
-            attn_result[:, self.pos, self.head, :] = 0.0
-        return attn_result
+        self.hooks = []
+        for layer, heads in self.layer_to_heads.items():
+            self.hooks.append((
+                f"blocks.{layer}.attn.hook_result",
+                self._make_ablation_hook(heads)
+            ))
+
+    def _make_ablation_hook(self, heads):
+        def hook(attn_result, hook):
+            attn_result[:, :, heads, :] = 0.0
+            return attn_result
+        return hook
 
     def __call__(self, *args, **kwargs):
-        with self.model.hooks(fwd_hooks=[self.hook]):
+        with self.model.hooks(fwd_hooks=self.hooks):
             return self.model(*args, **kwargs)
 
     def __getattr__(self, name):
         return getattr(self.model, name)
 
-ablated_model = AblatedModel(model, layer, head)
+important_heads = [(24, 5), (24, 7)]
+ablated_model = MultiHeadAblatedModel(model, important_heads)
 
 df_clean_avg, df_corrupt_avg = average_logit_tracking(
     model=ablated_model,
@@ -66,10 +71,10 @@ display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "Logit_Tracking")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
-clean_path_csv = os.path.join(output_folder, f"clean_prompts_ablated_L{layer}H{head}_all_pos.csv")
-clean_path_png = os.path.join(output_folder, f"clean_prompts_ablated_L{layer}H{head}_all_pos.png")
-corrupt_path_csv = os.path.join(output_folder, f"corrupt_prompts_ablated_L{layer}H{head}_all_pos.csv")
-corrupt_path_png = os.path.join(output_folder, f"corrupt_prompts_ablated_L{layer}H{head}_all_pos.png")
+clean_path_csv = os.path.join(output_folder, f"clean_prompts_top2_ablated_all_pos.csv")
+clean_path_png = os.path.join(output_folder, f"clean_prompts_top2_ablated_all_pos.png")
+corrupt_path_csv = os.path.join(output_folder, f"corrupt_prompts_top2_ablated_all_pos.csv")
+corrupt_path_png = os.path.join(output_folder, f"corrupt_prompts_top2_ablated_all_pos.png")
 
 ylim = get_shared_ylim(df_clean_avg, df_corrupt_avg)
 
