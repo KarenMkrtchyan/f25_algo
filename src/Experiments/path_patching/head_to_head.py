@@ -14,7 +14,8 @@ device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
 model = HookedTransformer.from_pretrained(
-    "Qwen/Qwen2.5-3b",
+    #"Qwen/Qwen2.5-3b",
+    "microsoft/Phi-3-mini-4k-instruct",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
@@ -25,21 +26,24 @@ model = HookedTransformer.from_pretrained(
 model.set_use_split_qkv_input(True)
 
 #%%
+prompt_list = prompt_list[:10]
 
-prompts = [p["clean_prompt"] for p in prompt_list]
+#prompts = [p["clean_prompt"] for p in prompt_list]
+prompts = [p["clean_prompt"] + " " for p in prompt_list]    # Phi
+
 labels = [p["clean_label"] for p in prompt_list]
 
 # Define the answers for each prompt, in the form (correct, incorrect)
 #%%
-answers = [(" yes", " NO") if label == " yes" else (" NO", " yes") for label in labels]
+answers = [("Yes", "No") if label == "Yes" else ("No", "Yes") for label in labels]
 
 # Define the answer tokens (same shape as the answers)
-yes_id = model.to_single_token(" yes")
-no_id  = model.to_single_token(" NO")
+yes_id = model.to_single_token("Yes")
+no_id  = model.to_single_token("No")
 
 answer_tokens = []
 for label in labels:
-    if label == " yes":
+    if label == "Yes":
         answer_tokens.append([yes_id, no_id])
     else:
         answer_tokens.append([no_id, yes_id])
@@ -48,7 +52,7 @@ answer_tokens = t.tensor(answer_tokens, device=device)
 #%%
 
 def patching_filter(name):
-    if any(n in name for n in ["resid_pre", "attn_out", "mlp_out", "z"]):
+    if any(n in name for n in ["resid_post", "attn_out", "mlp_out", "z"]):
         return True
 
     if "hook_q" in name and ".0." in name:
@@ -134,7 +138,7 @@ results = path_patch(
     orig_input=clean_tokens,
     new_input=flipped_tokens,
     sender_nodes= IterNode('z'),
-    receiver_nodes=Node("resid_post", 35),
+    receiver_nodes=Node("resid_post", 31),
     patching_metric=greater_than_metric_noising,
     verbose=True,
 )
@@ -142,7 +146,7 @@ results = path_patch(
 # %%
 
 imshow(
-    results['z'],
+    results['z'] * 100,
     title="Direct effect on logit diff (patch from head output -> final resid)",
     labels={"x": "Head", "y": "Layer", "color": "Logit diff variation"},
     border=True,
@@ -158,7 +162,7 @@ results = path_patch(
     orig_input=flipped_tokens,
     new_input=clean_tokens,
     sender_nodes=IterNode(["resid_pre", "attn_out", "mlp_out"], seq_pos="each"),
-    receiver_nodes=Node("resid_post", 35),
+    receiver_nodes=Node("resid_post", 31),
     patching_metric=greater_than_metric_denoising,
     direct_includes_mlps=False, # gives similar results to direct_includes_mlps=True
     verbose=True,
@@ -189,7 +193,7 @@ imshow(
 # %%
 # Patching head to head
 # Trying all possible paths
-SENDER_HEADS= [(20,12),(24,5),(24,7),(0,5),(0,4),(0, 1),(0,10),(0,12),(19,0),(0,13),(19,11),(34,14),(4,12),(9,9),(19,2),(28,2)]
+SENDER_HEADS = [(11,10),(15,9),(28,10),(19,11),(1,9),(17,2),(17,23),(16,16),(26,11)]
 RECEIVER_HEADS = SENDER_HEADS
 
 head_patch_res = []

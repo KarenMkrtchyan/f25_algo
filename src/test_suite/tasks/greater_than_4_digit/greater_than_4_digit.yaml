@@ -7,6 +7,6 @@ dataset_kwargs:
     - "../../../output/data-4-digit-00000.parquet"
 validation_split: train
 output_type: multiple_choice
-doc_to_text: "Is {{a}} > {{b}}? Answer:"
-doc_to_choice: [" yes", " NO"]
+doc_to_text: "Is {{a}} > {{b}}? Answer: "
+doc_to_choice: ["Yes", "No"]
 doc_to_target: "{{ 0 if (a > b) else 1 }}"

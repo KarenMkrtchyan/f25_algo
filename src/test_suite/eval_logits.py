@@ -114,12 +114,13 @@ def run_benchmark_logits(model, task_name, num_fewshot=0, limit=1000, run=1, abl
     print(f"Accuracy: {accuracy}")
     print(f"Logit diff: {avg_logit_diff}")
 
-    model_name_str = model if isinstance(model, str) else "custom_model"
+    model_name_str = model if isinstance(model, str) else "phi"
     model_name_str = model_name_str.replace("/", "__")
 
     file_name = os.path.join(
         output_dir,
         model_name_str,
+        
         f"accuracy_eval_{model_name_str}_{ablated_head}_{ablated_pos}_{task_name}_{num_fewshot}shot_RUN{run}.csv",
     )
 
