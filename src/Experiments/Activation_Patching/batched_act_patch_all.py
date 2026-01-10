@@ -17,8 +17,9 @@ from jaxtyping import Float, Int, Bool
 device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
+
 model = HookedTransformer.from_pretrained(
-    "Qwen/Qwen2.5-3b",
+    "microsoft/Phi-3-mini-4k-instruct",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
@@ -30,20 +31,24 @@ model.set_use_split_qkv_input(True)
 
 #%%
 
-prompts = [p["clean_prompt"] for p in prompt_list]
+prompt_list=prompt_list[:20]
+
+#prompts = [p["clean_prompt"] for p in prompt_list]
+prompts = [p["clean_prompt"] + " " for p in prompt_list]    # Phi
+
 labels = [p["clean_label"] for p in prompt_list]
 
 # Define the answers for each prompt, in the form (correct, incorrect)
 #%%
-answers = [(" yes", " NO") if label == " yes" else (" NO", " yes") for label in labels]
+answers = [("Yes", "No") if label == "Yes" else ("No", "Yes") for label in labels]
 
 # Define the answer tokens (same shape as the answers)
-yes_id = model.to_single_token(" yes")
-no_id  = model.to_single_token(" NO")
+yes_id = model.to_single_token("Yes")
+no_id  = model.to_single_token("No")
 
 answer_tokens = []
 for label in labels:
-    if label == " yes":
+    if label == "Yes":
         answer_tokens.append([yes_id, no_id])
     else:
         answer_tokens.append([no_id, yes_id])
@@ -167,6 +172,7 @@ imshow(
 )
 
 # %%
-hist(results['z'].detach().cpu().flatten())
+hist_res = results['z'] * 100
+hist(hist_res.detach().cpu().flatten())
 
 # %%
