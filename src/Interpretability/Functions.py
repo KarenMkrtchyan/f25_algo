@@ -2086,4 +2086,107 @@ def plot_activation_steering(
 
     return pc1
 
+def collect_final_logits(
+    model,
+    dataset,
+    yes_id,
+    no_id,
+    token_position=-1,
+    max_examples=None,
+):
+    """
+    Collects final-token logits for Yes/No on clean and corrupt prompts.
 
+    Returns:
+        clean_yes, clean_no, corrupt_yes, corrupt_no
+        (each is a list of floats)
+    """
+
+    clean_yes, clean_no = [], []
+    corrupt_yes, corrupt_no = [], []
+
+    iterator = dataset if max_examples is None else dataset[:max_examples]
+
+    for clean_text, corrupt_text, *_ in tqdm(
+        iterator,
+        desc="Collecting final logits",
+    ):
+        # ---- Clean ----
+        tokens = model.to_tokens(clean_text)
+        logits = model(tokens)[0, token_position]
+
+        clean_yes.append(logits[yes_id].item())
+        clean_no.append(logits[no_id].item())
+
+        # ---- Corrupt ----
+        tokens = model.to_tokens(corrupt_text)
+        logits = model(tokens)[0, token_position]
+
+        corrupt_yes.append(logits[yes_id].item())
+        corrupt_no.append(logits[no_id].item())
+
+    return clean_yes, clean_no, corrupt_yes, corrupt_no
+
+def plot_final_logits_box(
+    clean_yes,
+    clean_no,
+    corrupt_yes,
+    corrupt_no,
+    save_path=None,
+):
+    """
+    clean_yes, clean_no, corrupt_yes, corrupt_no:
+        lists or 1D tensors of final-token logits
+    """
+
+    data = [
+        clean_yes,
+        clean_no,
+        corrupt_yes,
+        corrupt_no,
+    ]
+
+    # Positions control spacing
+    positions = [1, 2, 4, 5]  # gap between clean (1,2) and corrupt (4,5)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    box = ax.boxplot(
+        data,
+        positions=positions,
+        widths=0.6,
+        patch_artist=True,
+        showfliers=True,
+    )
+
+    # Color boxes
+    colors = [
+        "tab:blue",   # Clean Yes
+        "tab:blue",   # Clean No
+        "orange",     # Corrupt Yes
+        "orange",     # Corrupt No
+    ]
+
+    for patch, color in zip(box["boxes"], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.7)
+
+    # X-axis labels
+    ax.set_xticks(positions)
+    ax.set_xticklabels(
+        ["Clean Yes", "Clean No", "Corrupt Yes", "Corrupt No"],
+        rotation=0,
+    )
+
+    ax.set_ylabel("Final Logit Value")
+    ax.set_title("Final Token Logits: Clean vs Corrupt")
+
+    # Optional vertical separator
+    ax.axvline(3, linestyle="--", alpha=0.4)
+
+    plt.tight_layout()
+
+    if save_path is not None:
+        plt.savefig(save_path, dpi=200)
+
+    plt.show()

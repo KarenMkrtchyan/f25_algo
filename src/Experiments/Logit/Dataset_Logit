@@ -1,0 +1,75 @@
+import os
+import pandas as pd
+import sys
+import torch as t
+import numpy as np
+from tqdm import tqdm
+from collections import defaultdict
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from utils.model_config import load_model
+from utils.device_utils import get_device
+from Interpretability import build_dataset, plot_final_logits_box, collect_final_logits
+from neel_plotly import imshow
+import transformer_lens.utils as utils
+
+dataset = build_dataset(n=100, low=1000, high=9999)
+
+#model_name = "pythia-70m"
+model_name = "qwen2.5-3b"
+model = load_model(model_name)
+device = get_device()
+
+yes_id = model.to_tokens(" Yes")[0, 0].item()
+no_id  = model.to_tokens(" No")[0, 0].item()
+
+class MultiHeadAblatedModel:
+    def __init__(self, model, heads_to_ablate):
+        """
+        heads_to_ablate: list of (layer, head) tuples
+        e.g. [(24,5), (24,7), (26,1)]
+        """
+        self.model = model
+
+        self.layer_to_heads = defaultdict(list)
+        for layer, head in heads_to_ablate:
+            self.layer_to_heads[layer].append(head)
+
+        self.hooks = []
+        for layer, heads in self.layer_to_heads.items():
+            self.hooks.append((
+                f"blocks.{layer}.attn.hook_result",
+                self._make_ablation_hook(heads)
+            ))
+
+    def _make_ablation_hook(self, heads):
+        def hook(attn_result, hook):
+            attn_result[:, :, heads, :] = 0.0
+            return attn_result
+        return hook
+
+    def __call__(self, *args, **kwargs):
+        with self.model.hooks(fwd_hooks=self.hooks):
+            return self.model(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.model, name)
+
+important_heads = [(24, 7), (24, 5)]
+ablated_model = MultiHeadAblatedModel(model, important_heads)
+
+results_folder = "Results"
+display_folder = os.path.join(results_folder, "Digit_Experiment")
+digit_folder = os.path.join(display_folder, "Logit_Tracking")
+output_folder = os.path.join(digit_folder, f"{model_name}")
+os.makedirs(output_folder, exist_ok=True)
+ablated_path = os.path.join(output_folder, f"Ablated_top2.png")
+
+clean_yes, clean_no, corrupt_yes, corrupt_no = collect_final_logits(
+    ablated_model, dataset, yes_id, no_id, max_examples=100
+)
+
+plot_final_logits_box(clean_yes, clean_no, corrupt_yes, corrupt_no, save_path = ablated_path)
+#plot_final_logits_box(ablated_results, "Ablated Model (Top Heads Removed)", save_path = ablated_path)
+

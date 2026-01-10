@@ -64,7 +64,9 @@ from .Functions import (
     average_logit_tracking,
     get_shared_ylim,
     ablate_attn_head_last_pos,
-    make_ablated_model
+    make_ablated_model,
+    plot_final_logits_box, 
+    collect_final_logits
 )
 
 # Version information

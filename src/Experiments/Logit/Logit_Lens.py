@@ -55,7 +55,7 @@ class MultiHeadAblatedModel:
     def __getattr__(self, name):
         return getattr(self.model, name)
 
-important_heads = [(24, 5), (24, 7), (24, 0)]
+important_heads = [(24, 5), (24, 7), (24, 0), (26, 1), (35, 12)]
 ablated_model = MultiHeadAblatedModel(model, important_heads)
 
 df_clean_avg, df_corrupt_avg = average_logit_tracking(
@@ -68,7 +68,7 @@ df_clean_avg, df_corrupt_avg = average_logit_tracking(
 
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
-digit_folder = os.path.join(display_folder, "Logit_Tracking")
+digit_folder = os.path.join(display_folder, "Logit_Lens")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
 clean_path_csv = os.path.join(output_folder, f"clean_prompts_top3_ablated_all_pos.csv")
