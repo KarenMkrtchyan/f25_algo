@@ -1867,6 +1867,106 @@ def plot_head_PCA(
 
     return df
 
+def plot_head_input_PCA(
+    model,
+    batches_base,
+    batches_src,
+    layer: int,
+    title=None,
+    save_path=None,
+    max_points=600,
+):
+    """
+    PCA on the residual stream input to the attention block
+    (i.e. what all heads at this layer read from).
+
+    This corresponds to blocks.{layer}.hook_resid_pre
+    """
+
+    import torch as t
+    import numpy as np
+    from sklearn.decomposition import PCA
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    clean_inputs = []
+    corrupt_inputs = []
+
+    last_pos = -1
+    hook_name = f"blocks.{layer}.hook_resid_pre"
+
+    with t.no_grad():
+        for bb, sb in zip(batches_base, batches_src):
+
+            # ---- clean ----
+            _, clean_cache = model.run_with_cache(
+                bb,
+                names_filter=hook_name
+            )
+
+            # shape: [batch, seq, d_model]
+            clean_resid = clean_cache[hook_name][:, last_pos, :]
+            clean_inputs.append(clean_resid.cpu())
+
+            del clean_cache
+            t.cuda.empty_cache()
+
+            # ---- corrupt ----
+            _, corrupt_cache = model.run_with_cache(
+                sb,
+                names_filter=hook_name
+            )
+
+            corrupt_resid = corrupt_cache[hook_name][:, last_pos, :]
+            corrupt_inputs.append(corrupt_resid.cpu())
+
+            del corrupt_cache
+            t.cuda.empty_cache()
+
+            # Early stop
+            if sum(x.shape[0] for x in clean_inputs) >= max_points:
+                break
+
+    # Stack on CPU
+    clean_mat = t.cat(clean_inputs, dim=0)[:max_points].numpy()
+    corrupt_mat = t.cat(corrupt_inputs, dim=0)[:max_points].numpy()
+
+    X = np.vstack([clean_mat, corrupt_mat])
+    y = np.array([1]*len(clean_mat) + [0]*len(corrupt_mat))
+
+    # PCA
+    pca = PCA(n_components=2)
+    pcs = pca.fit_transform(X)
+
+    df = pd.DataFrame({
+        "PC1": pcs[:, 0],
+        "PC2": pcs[:, 1],
+        "Class": np.where(y == 1, "Greater (a>b)", "Less (b>a)")
+    })
+
+    # Plot
+    plt.figure(figsize=(8, 6))
+    sns.scatterplot(
+        data=df,
+        x="PC1",
+        y="PC2",
+        hue="Class",
+        s=40,
+        alpha=0.8
+    )
+
+    plt.title(title or f"PCA of Residual Input (Layer {layer})")
+    plt.grid(alpha=0.3)
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    plt.show()
+
+    return df
+
+
 import torch as t
 import numpy as np
 import matplotlib.pyplot as plt

@@ -66,7 +66,8 @@ from .Functions import (
     ablate_attn_head_last_pos,
     make_ablated_model,
     plot_final_logits_box, 
-    collect_final_logits
+    collect_final_logits,
+    plot_head_input_PCA
 )
 
 # Version information
