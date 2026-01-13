@@ -52,3 +52,4 @@ df = plot_head_PCA(
 )
 
 df.to_csv(csv_path, index = False)
+print("PCA finished and saved")
