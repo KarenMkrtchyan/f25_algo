@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from utils.model_config import load_model
 from utils.device_utils import get_device
-from Interpretability import build_dataset, compute_act_patching, get_logit_diff, paper_plot, build_numeric_batches, compute_baselines, numeric_metric, plot_all_patch_effects_paper, save_sorted_head_importance, plot_component_scores, plot_component_scores_lastpos
+from Interpretability import build_dataset, build_dataset_space, compute_act_patching, get_logit_diff, paper_plot, build_numeric_batches, compute_baselines, numeric_metric, plot_all_patch_effects_paper, save_sorted_head_importance, plot_component_scores, plot_component_scores_lastpos
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
@@ -22,8 +22,10 @@ model_name = "phi-3"
 model = load_model(model_name)
 device = get_device()
 
-yes_id = model.to_single_token(" Yes")
-no_id = model.to_single_token(" No")
+#yes_id = model.to_single_token(" Yes")
+#no_id = model.to_single_token(" No")
+yes_id = model.to_single_token("Yes")
+no_id = model.to_single_token("No")
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
 num_batches = len(batches_src)
