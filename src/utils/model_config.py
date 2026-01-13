@@ -59,6 +59,9 @@ COMMON_MODELS = {
     "qwen2.5-72b": "Qwen/Qwen2.5-72B",
     "qwen3-1.7b": "Qwen/Qwen3-1.7B",
     "qwen3-4b": "Qwen/Qwen3-4B", 
+
+    # Phi Family (Microsoft)
+    "phi-3": "microsoft/Phi-3-mini-4k-instruct",
 }
 
 def get_model_config(model_name: str) -> Dict[str, Any]:
