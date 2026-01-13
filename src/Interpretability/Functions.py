@@ -968,6 +968,21 @@ def test_logit_lens(df_tokens, candidates):
 def make_prompt(a, b):
     return f"Is {a} > {b}? Answer:"
 
+def make_prompt_space(a, b):
+    return f"Is {a} > {b}? Answer: "
+
+def build_dataset_space(n=2000, seed=42, low=1, high=100000):
+    rng = np.random.default_rng(seed)
+    data = []
+    for _ in range(n):
+        a = int(rng.integers(low, high))
+        b = int(rng.integers(low, a))
+        clean = make_prompt_space(a, b)
+        corrupt = make_prompt_space(b, a)
+        label = int(a > b)
+        data.append((clean, corrupt, a, b, label))
+    return data
+
 def build_dataset(n=2000, seed=42, low=1, high=100000):
     rng = np.random.default_rng(seed)
     data = []
