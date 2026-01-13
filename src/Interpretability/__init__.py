@@ -32,6 +32,7 @@ from .Functions import (
     plot_token_logits,
     test_logit_lens,
     build_dataset,
+    build_dataset_space,
     logit_diff,
     patch_component,
     serialize_cache,
