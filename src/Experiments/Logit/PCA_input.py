@@ -24,7 +24,7 @@ device = get_device()
 yes_id = model.to_single_token(" Yes")
 no_id = model.to_single_token(" No")
 
-Attention_Layer = 24
+Attention_Layer = 17
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
 num_batches = len(batches_src)
