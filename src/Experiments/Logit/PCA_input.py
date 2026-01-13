@@ -24,14 +24,14 @@ device = get_device()
 yes_id = model.to_single_token(" Yes")
 no_id = model.to_single_token(" No")
 
-Attention_Layer = 17
+Attention_Layer = 15
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
 num_batches = len(batches_src)
 print(f"Batched into {num_batches} batches")
 print("\n")
 
-print(f"Computing PCA on Layer {Attention_Layer}")
+print(f"Computing PCA on input of Layer {Attention_Layer}")
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "4digit")
@@ -49,3 +49,4 @@ df = plot_head_input_PCA(
 )
 
 df.to_csv(csv_path, index = False)
+print("Finished PCA on input")
