@@ -22,8 +22,10 @@ model = load_model(model_name)
 model.set_use_attn_result(True)
 device = get_device()
 
-yes_id = model.to_single_token(" Yes")
-no_id = model.to_single_token(" No")
+#yes_id = model.to_single_token(" Yes")
+#no_id = model.to_single_token(" No")
+yes_id = model.to_single_token("Yes")
+no_id = model.to_single_token("No")
 
 Attention_Layer = 28
 
