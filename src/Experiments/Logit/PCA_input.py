@@ -15,20 +15,20 @@ import transformer_lens.utils as utils
 dataset = build_dataset(n=100, low=1000, high=9999)
 
 #model_name = "pythia-70m"
-#model_name = "qwen2.5-3b"
+model_name = "qwen2.5-3b"
 #model_name = "qwen3-1.7b"
-model_name = "phi-3"
+#model_name = "phi-3"
 model = load_model(model_name)
 model.set_use_attn_result(True)
 device = get_device()
 
-#yes_id = model.to_single_token(" Yes")
-#no_id = model.to_single_token(" No")
-yes_id = model.to_single_token("Yes")
-no_id = model.to_single_token("No")
+yes_id = model.to_single_token(" Yes")
+no_id = model.to_single_token(" No")
+#yes_id = model.to_single_token("Yes")
+#no_id = model.to_single_token("No")
 
 #Attention_Layer = 15
-layers = [16, 17, 18, 19, 20]
+layers = [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35]
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
 num_batches = len(batches_src)
