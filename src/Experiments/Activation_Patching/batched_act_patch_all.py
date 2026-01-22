@@ -10,16 +10,21 @@ from transformer_lens.HookedTransformer import HookedTransformer
 import torch as t
 from torch import Tensor
 from jaxtyping import Float, Int, Bool
-
-
+from dotenv import load_dotenv
+from huggingface_hub import login
 
 # %%
 device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
+load_dotenv()
+hf_key = os.getenv("HF_TOKEN")
+login(token=hf_key)
+
+#%%
 
 model = HookedTransformer.from_pretrained(
-    "microsoft/Phi-3-mini-4k-instruct",
+    "google/gemma-2-9b-it",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
@@ -28,7 +33,6 @@ model = HookedTransformer.from_pretrained(
 )
 
 model.set_use_split_qkv_input(True)
-
 #%%
 
 prompt_list=prompt_list[:20]
