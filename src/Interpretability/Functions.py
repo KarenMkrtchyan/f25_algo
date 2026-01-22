@@ -2305,3 +2305,198 @@ def plot_final_logits_box(
         plt.savefig(save_path, dpi=200)
 
     plt.show()
+
+def plot_all_dla_effects_paper(model, dla_resid, dla_attn, dla_mlp, dla_heads, output_folder, title_prefix="Direct Logit Attribution"):
+    """
+    Paper-style Direct Logit Attribution visualization using neel_plotly.
+    title_prefix: string to show in the figure titles
+    """
+    os.makedirs(output_folder, exist_ok=True)
+
+    num_layers = model.cfg.n_layers
+    num_pos = dla_resid.size(1)
+    num_heads = dla_heads.size(1)
+
+    # Flip layers so final layers shown at top
+    resid = t.flip(dla_resid, dims=[0])
+    attn = t.flip(dla_attn, dims=[0])
+    mlp = t.flip(dla_mlp, dims=[0])
+    heads = t.flip(dla_heads, dims=[0])
+
+    y_labels = [f"L{L}" for L in range(num_layers - 1, -1, -1)]
+    x_pos = [f"pos {i}" for i in range(num_pos)]
+    x_heads = [f"H{i}" for i in range(num_heads)]
+
+    # ============ LEFT FIGURE (3 components shared) ============
+    stack = t.stack([resid, attn, mlp], dim=0)
+
+    fig_blocks = imshow(
+        stack,
+        facet_col=0,
+        facet_labels=["Residual Stream", "Attn Output", "MLP Output"],
+        y=y_labels,
+        x=x_pos,
+        zmin=-stack.abs().max().item(),
+        zmax=stack.abs().max().item(),
+        color_continuous_scale="RdBu",
+        title=f"{title_prefix} (Blocks)",
+        return_fig=True
+    )
+    fig_blocks.update_xaxes(tickangle=45)
+    fig_blocks.update_coloraxes(colorbar=dict(title="Logit Contribution"))
+    fig_blocks.show()
+    fig_blocks.write_image(os.path.join(output_folder, "dla_blocks.png"), scale=3, width=1100, height=600)
+
+    # ============ RIGHT FIGURE (heads) ============
+    fig_heads = imshow(
+        heads,
+        y=y_labels,
+        x=x_heads,
+        zmin=-heads.abs().max().item(),
+        zmax=heads.abs().max().item(),
+        color_continuous_scale="RdBu",
+        title=f"{title_prefix} (Heads)",
+        return_fig=True
+    )
+    fig_heads.update_xaxes(tickangle=45)
+    fig_heads.update_coloraxes(colorbar=dict(title="Logit Contribution"))
+    fig_heads.show()
+    fig_heads.write_image(os.path.join(output_folder, "dla_heads.png"), scale=3, width=700, height=600)
+
+def direct_logit_attribution_all_positions(
+    model,
+    batches,
+    yes_id: int,
+    no_id: int,
+    max_batches=None,
+    top_k_heads=12
+):
+    """
+    Computes direct logit attribution for ALL token positions in the sequence.
+    Returns:
+        dict with tensors:
+        - attn_yes, attn_no: [layers, seq_len]
+        - mlp_yes, mlp_no: [layers, seq_len]
+        - head_yes, head_no: [layers, heads]
+    """
+    device = model.cfg.device
+    n_layers = model.cfg.n_layers
+    n_heads = model.cfg.n_heads
+
+    attn_yes = None
+    attn_no = None
+    mlp_yes = None
+    mlp_no = None
+    head_yes = t.zeros(n_layers, n_heads, device=device)
+    head_no  = t.zeros(n_layers, n_heads, device=device)
+
+    W_U = model.W_U.to(device)
+    w_yes = W_U[:, yes_id]
+    w_no  = W_U[:, no_id]
+
+    if max_batches is not None:
+        batches = batches[:max_batches]
+
+    for batch in tqdm(batches, desc="Direct Logit Attribution"):
+        batch = batch.to(device)
+        _, cache = model.run_with_cache(batch)
+        seq_len = batch.shape[1]
+
+        # Initialize accumulators once we know seq_len
+        if attn_yes is None:
+            attn_yes = t.zeros(n_layers, seq_len, device=device)
+            attn_no  = t.zeros(n_layers, seq_len, device=device)
+            mlp_yes  = t.zeros(n_layers, seq_len, device=device)
+            mlp_no   = t.zeros(n_layers, seq_len, device=device)
+
+        for l in range(n_layers):
+            attn_out = cache[f"blocks.{l}.hook_attn_out"]  # [batch, seq_len, d_model]
+            mlp_out  = cache[f"blocks.{l}.hook_mlp_out"]
+
+            # Compute logit contributions per token, sum over batch
+            attn_yes[l] += (attn_out @ w_yes).sum(dim=0)
+            attn_no[l]  += (attn_out @ w_no).sum(dim=0)
+            mlp_yes[l]  += (mlp_out @ w_yes).sum(dim=0)
+            mlp_no[l]   += (mlp_out @ w_no).sum(dim=0)
+
+            # Heads contributions
+            z = cache[f"blocks.{l}.attn.hook_z"]  # [batch, seq_len, n_heads, d_head]
+            for h in range(n_heads):
+                z_h = z[:, :, h, :]              # [batch, seq_len, d_head]
+                W_O_h = model.blocks[l].attn.W_O[h]  # [d_head, d_model]
+                head_out = z_h @ W_O_h           # [batch, seq_len, d_model]
+                head_yes[l, h] += (head_out @ w_yes).sum()
+                head_no[l, h]  += (head_out @ w_no).sum()
+
+        del cache
+        t.cuda.empty_cache()
+
+    # Move to CPU
+    attn_yes = attn_yes.cpu()
+    attn_no  = attn_no.cpu()
+    mlp_yes  = mlp_yes.cpu()
+    mlp_no   = mlp_no.cpu()
+    head_yes = head_yes.cpu()
+    head_no  = head_no.cpu()
+
+    return {
+        "attn_yes": attn_yes,
+        "attn_no": attn_no,
+        "mlp_yes": mlp_yes,
+        "mlp_no": mlp_no,
+        "head_yes": head_yes,
+        "head_no": head_no
+    }
+
+def compute_dla_difference_all_positions(results, mode="yes_no"):
+    if mode == "yes_no":
+        dla_attn = results['attn_yes'] - results['attn_no']  # [layers, seq_len]
+        dla_mlp  = results['mlp_yes']  - results['mlp_no']
+        dla_heads = results['head_yes'] - results['head_no']
+    elif mode == "no_yes":
+        dla_attn = results['attn_no'] - results['attn_yes']
+        dla_mlp  = results['mlp_no']  - results['mlp_yes']
+        dla_heads = results['head_no'] - results['head_yes']
+    else:
+        raise ValueError("mode must be 'yes_no' or 'no_yes'")
+
+    # Residual stream placeholder
+    dla_resid = t.zeros_like(dla_attn)
+    return dla_resid, dla_attn, dla_mlp, dla_heads
+
+def full_dla_pipeline_all_positions(model, clean_batches, corrupt_batches, yes_id, no_id, output_folder="dla_figures"):
+    os.makedirs(output_folder, exist_ok=True)
+
+    # --- Clean ---
+    print("Running DLA on clean batches...")
+    dla_clean_results = direct_logit_attribution_all_positions(model, clean_batches, yes_id, no_id)
+    dla_resid_clean, dla_attn_clean, dla_mlp_clean, dla_heads_clean = compute_dla_difference_all_positions(
+        dla_clean_results, mode="yes_no"
+    )
+    plot_all_dla_effects_paper(
+    model,
+    dla_resid_clean,
+    dla_attn_clean,
+    dla_mlp_clean,
+    dla_heads_clean,
+    os.path.join(output_folder, "clean"),
+    title_prefix="Direct Logit Attribution (Yes - No)"
+    )
+
+    # --- Corrupt ---
+    print("Running DLA on corrupt batches...")
+    dla_corrupt_results = direct_logit_attribution_all_positions(model, corrupt_batches, yes_id, no_id)
+    dla_resid_corrupt, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt = compute_dla_difference_all_positions(
+        dla_corrupt_results, mode="no_yes"
+    )
+    plot_all_dla_effects_paper(
+    model,
+    dla_resid_corrupt,
+    dla_attn_corrupt,
+    dla_mlp_corrupt,
+    dla_heads_corrupt,
+    os.path.join(output_folder, "corrupt"),
+    title_prefix="Direct Logit Attribution (No - Yes)"
+    )
+
+
