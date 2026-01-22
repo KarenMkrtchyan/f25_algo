@@ -2464,6 +2464,30 @@ def compute_dla_difference_all_positions(results, mode="yes_no"):
     dla_resid = t.zeros_like(dla_attn)
     return dla_resid, dla_attn, dla_mlp, dla_heads
 
+def save_head_contributions_csv(dla_heads, output_folder, filename="head_contributions.csv"):
+    """
+    Saves attention head contributions to a CSV, ranked by magnitude.
+    dla_heads: [layers, heads] tensor of contributions (Yes-No or No-Yes)
+    """
+    os.makedirs(output_folder, exist_ok=True)
+    n_layers, n_heads = dla_heads.shape
+
+    data = []
+    for l in range(n_layers):
+        for h in range(n_heads):
+            data.append({
+                "Layer": l,
+                "Head": h,
+                "Contribution": dla_heads[l, h].item()
+            })
+
+    df = pd.DataFrame(data)
+    # Sort descending by contribution
+    df = df.sort_values(by="Contribution", ascending=False)
+    csv_path = os.path.join(output_folder, filename)
+    df.to_csv(csv_path, index=False)
+    print(f"Saved head contributions CSV: {csv_path}")
+
 def full_dla_pipeline_all_positions(model, clean_batches, corrupt_batches, yes_id, no_id, output_folder="dla_figures"):
     os.makedirs(output_folder, exist_ok=True)
 
@@ -2473,6 +2497,7 @@ def full_dla_pipeline_all_positions(model, clean_batches, corrupt_batches, yes_i
     dla_resid_clean, dla_attn_clean, dla_mlp_clean, dla_heads_clean = compute_dla_difference_all_positions(
         dla_clean_results, mode="yes_no"
     )
+
     plot_all_dla_effects_paper(
     model,
     dla_resid_clean,
@@ -2498,5 +2523,9 @@ def full_dla_pipeline_all_positions(model, clean_batches, corrupt_batches, yes_i
     os.path.join(output_folder, "corrupt"),
     title_prefix="Direct Logit Attribution (No - Yes)"
     )
+
+    save_head_contributions_csv(dla_heads_clean, os.path.join(output_folder, "clean"), filename="head_contributions.csv")
+
+    save_head_contributions_csv(dla_heads_corrupt, os.path.join(output_folder, "corrupt"), filename="head_contributions.csv")
 
 
