@@ -69,7 +69,8 @@ from .Functions import (
     plot_final_logits_box, 
     collect_final_logits,
     plot_head_input_PCA,
-    full_dla_pipeline_all_positions
+    full_dla_pipeline_all_positions,
+    full_dla_pipeline_normalized
 )
 
 # Version information
