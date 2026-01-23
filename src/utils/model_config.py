@@ -37,14 +37,17 @@ COMMON_MODELS = {
     "llama-13b": "meta-llama/Llama-2-13b-hf",
     "llama-70b": "meta-llama/Llama-2-70b-hf",
     "llama-3-8b": "meta-llama/Meta-Llama-3-8B",
+    "llama3-8b-it": "meta-llama/Meta-Llama-3-8B-Instruct",
     "llama-3-70b": "meta-llama/Meta-Llama-3-70B",
     "llama3.2-3b": "meta-llama/Llama-3.2-3B",
 
     # Gemma Family (Google)
     "gemma-2b": "google/gemma-2b",
     "gemma-7b": "google/gemma-7b",
+    "gemma-7b-it": "google/gemma-7b-it",
     "gemma-2-2b": "google/gemma-2-2b",
     "gemma-2-9b": "google/gemma-2-9b",
+    "gemma-2-9b-it": "google/gemma-2-9b-it",
 
     # Qwen Family (Alibaba)
     "qwen-7b": "Qwen/Qwen-7B",
