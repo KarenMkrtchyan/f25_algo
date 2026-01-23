@@ -14,36 +14,36 @@ device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
 model = HookedTransformer.from_pretrained(
-    #"Qwen/Qwen2.5-3b",
-    "microsoft/Phi-3-mini-4k-instruct",
+    "Qwen/Qwen2.5-3b",
+    #"microsoft/Phi-3-mini-4k-instruct",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
     refactor_factored_attn_matrices=False,
-    torch_dtype=t.bfloat16,
+    #torch_dtype=t.bfloat16,
 )
 
 model.set_use_split_qkv_input(True)
 
 #%%
-prompt_list = prompt_list[:10]
+prompt_list = prompt_list[:20]
 
-#prompts = [p["clean_prompt"] for p in prompt_list]
-prompts = [p["clean_prompt"] + " " for p in prompt_list]    # Phi
+prompts = [p["clean_prompt"] for p in prompt_list]
+#prompts = [p["clean_prompt"] + " " for p in prompt_list]    # Phi
 
 labels = [p["clean_label"] for p in prompt_list]
 
 # Define the answers for each prompt, in the form (correct, incorrect)
 #%%
-answers = [("Yes", "No") if label == "Yes" else ("No", "Yes") for label in labels]
+answers = [(" yes", " NO") if label == " yes" else (" NO", " yes") for label in labels]
 
 # Define the answer tokens (same shape as the answers)
-yes_id = model.to_single_token("Yes")
-no_id  = model.to_single_token("No")
+yes_id = model.to_single_token(" yes")
+no_id  = model.to_single_token(" NO")
 
 answer_tokens = []
 for label in labels:
-    if label == "Yes":
+    if label == " yes":
         answer_tokens.append([yes_id, no_id])
     else:
         answer_tokens.append([no_id, yes_id])
@@ -229,14 +229,14 @@ for item in head_patch_res:
 # Testing edge between L20H12 and top 10 Layer 23 neurons
 
 SENDER_HEADS = [(25,7)]
-RECEIVER_NEURONS = [(34, 7828)]
+RECEIVER_NEURONS = [(30, 9075)]
 
 results = path_patch(
     model,
     orig_input=clean_tokens,
     new_input=flipped_tokens,
-    sender_nodes=IterNode("z"),
-    receiver_nodes=[Node("pre", layer=n_l, neuron=n_n) for n_l, n_n in RECEIVER_NEURONS],
+    sender_nodes=Node("z", 24, 5),
+    receiver_nodes=Node("pre", 30, 9475),
     patching_metric=greater_than_metric_noising,
     verbose=True,
 )
@@ -246,7 +246,7 @@ results
 #%%
 imshow(
     results['z'],
-    title="Path patch where receiver Node = N30I1114",
+    title="Path patch where receiver neuron = N30.1114",
     labels={"x": "Head", "y": "Layer", "color": "Logit diff variation"},
     border=True,
     width=600,

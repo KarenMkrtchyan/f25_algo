@@ -6,15 +6,22 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from test_suite.eval import run_benchmark
+from dotenv import load_dotenv
+from huggingface_hub import login
 
+#%%
 model_names = [
     # "Qwen/Qwen2.5-7B", 
     # "Qwen/Qwen2.5-3B", 
     # "google/gemma-2-2b", 
     # "meta-llama/Llama-3.2-3B",
-    "microsoft/Phi-3-mini-4k-instruct",
+    #"microsoft/Phi-3-mini-4k-instruct",
     # "Qwen/Qwen2.5-1.5b",
     # "Qwen/Qwen3-1.7b",
+    #"meta-llama/Llama-3.1-8B-Instruct",
+    #"google/gemma-7b-it",
+    "google/gemma-2-9b-it",
+    #"Qwen/Qwen3-8B"
     ]
 
 tasks=[

@@ -12,22 +12,23 @@ from lm_eval import evaluator, tasks
 from tl_eval.lm_evaluator import *
 
 load_dotenv()
-hf_api = os.getenv("HUGGINGFACE_KEY")
+hf_api = os.getenv("HF_KEY")
 login(token=hf_api)
 #%%
 
 def run_benchmark(model, task_name, num_fewshot=0, limit=1000, run=1, ablated_head="",ablated_pos=""):
     torch.cuda.empty_cache()
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-
-    output_dir = os.path.abspath(
-        os.path.join(current_dir, "dataruns", "benchmarks")
-    )
-
-    tasks_dir = os.path.join(current_dir, "../test_suite/tasks")
-    tm = tasks.TaskManager(include_path=tasks_dir)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    here = Path(__file__).resolve()
+    repo_root = next(p for p in here.parents if (p / "src").exists())
+
+    output_dir = (repo_root / "src" / "test_suite" / "dataruns" / "benchmarks").resolve()
+
+    tasks_dir = (repo_root / "src" / "test_suite" / "tasks").resolve()
+
+    tm = tasks.TaskManager(include_path=str(tasks_dir))
 
     results = []
 
