@@ -6,7 +6,8 @@ from utils.model_config import load_model
 
 #model_name = "phi-3"
 #model_name = "qwen2.5-3b"
-model_name = "gemma-2-9b-it"
+#model_name = "gemma-2-9b-it"
+model_name = "llama3-8b-it"
 model = load_model(model_name)
 
 #example_prompt = "After John and Mary went to the store, John gave a bottle of milk to"
