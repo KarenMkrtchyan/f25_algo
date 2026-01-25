@@ -22,7 +22,8 @@ dataset = build_dataset_space(n=100, low=1000, high=9999)
 #model_name = "qwen3-1.7b"
 #model_name = "phi-3"
 #model_name = "gemma-2-9b-it"
-model_name = "llama3-8b-it"
+#model_name = "llama3-8b-it"
+model_name = "qwen2.5-7b"
 
 model = load_model(model_name)
 device = get_device()
