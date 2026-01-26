@@ -1846,8 +1846,8 @@ def plot_head_PCA(
                 break
 
     # Stack on CPU
-    clean_mat = t.cat(clean_outputs, dim=0)[:max_points].numpy()
-    corrupt_mat = t.cat(corrupt_outputs, dim=0)[:max_points].numpy()
+    clean_mat = t.cat(clean_outputs, dim=0)[:max_points].float().cpu().numpy()
+    corrupt_mat = t.cat(corrupt_outputs, dim=0)[:max_points].float().cpu().numpy()
 
     X = np.vstack([clean_mat, corrupt_mat])
     y = np.array([1]*len(clean_mat) + [0]*len(corrupt_mat))
@@ -1944,8 +1944,8 @@ def plot_head_input_PCA(
                 break
 
     # Stack on CPU
-    clean_mat = t.cat(clean_inputs, dim=0)[:max_points].numpy()
-    corrupt_mat = t.cat(corrupt_inputs, dim=0)[:max_points].numpy()
+    clean_mat = t.cat(clean_inputs, dim=0)[:max_points].float().cpu().numpy()
+    corrupt_mat = t.cat(corrupt_inputs, dim=0)[:max_points].float().cpu().numpy()
 
     X = np.vstack([clean_mat, corrupt_mat])
     y = np.array([1]*len(clean_mat) + [0]*len(corrupt_mat))
