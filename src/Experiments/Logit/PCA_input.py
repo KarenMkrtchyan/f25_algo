@@ -45,9 +45,10 @@ for Attention_Layer in layers:
     display_folder = os.path.join(results_folder, "Digit_Experiment")
     digit_folder = os.path.join(display_folder, "4digit")
     output_folder = os.path.join(digit_folder, f"{model_name}")
-    os.makedirs(output_folder, exist_ok=True)
-    PCA_path = os.path.join(output_folder, f"PCA_input_Layer{Attention_Layer}.png")
-    csv_path = os.path.join(output_folder, f"PCA_input_Layer{Attention_Layer}.csv")
+    PCA_input_folder = os.path.join(output_folder, "PCA_input")
+    os.makedirs(PCA_input_folder, exist_ok=True)
+    PCA_path = os.path.join(PCA_input_folder, f"PCA_input_Layer{Attention_Layer}.png")
+    csv_path = os.path.join(PCA_input_folder, f"PCA_input_Layer{Attention_Layer}.csv")
 
     df = plot_head_input_PCA(
         model,
