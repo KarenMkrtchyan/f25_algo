@@ -25,7 +25,7 @@ model_name = "pythia-70m"
 #model_name = "llama3-8b-it"
 #model_name = "qwen2.5-7b"
 
-model = load_model(model_name, torch_dtype = torch_dtype=t.bfloat16)
+model = load_model(model_name, torch_dtype = t.bfloat16)
 device = get_device()
 
 #yes_id = model.to_single_token(" Yes")
