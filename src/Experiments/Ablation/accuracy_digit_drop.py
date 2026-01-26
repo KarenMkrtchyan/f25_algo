@@ -11,9 +11,12 @@ from huggingface_hub import login
 
 #%%
 model_names = [
-    "Qwen/Qwen2-1.5B",	
-    "google/gemma-2-2b-it",
-    "meta-llama/Llama-3.2-3B-Instruct",
+    "facebook/opt-2.7b",
+    "EleutherAI/gpt-neo-2.7B",
+    "stabilityai/stablelm-tuned-alpha-3b"
+    # "Qwen/Qwen2-1.5B",	
+    # "google/gemma-2-2b-it",
+    # "meta-llama/Llama-3.2-3B-Instruct",
     # "Qwen/Qwen2.5-7B", 
     # "Qwen/Qwen2.5-3B", 
     # "google/gemma-2-2b", 

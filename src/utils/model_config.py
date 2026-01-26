@@ -67,6 +67,10 @@ COMMON_MODELS = {
 
     # Phi Family (Microsoft)
     "phi-3": "microsoft/Phi-3-mini-4k-instruct",
+
+    # Stablem Family (Stabilityai)
+    "stablelm-tuned-alpha-3b": "stabilityai/stablelm-tuned-alpha-3b",
+    "stablelm-tuned-alpha-7b": "stabilityai/stablelm-tuned-alpha-7b"
 }
 
 def get_model_config(model_name: str) -> Dict[str, Any]:
