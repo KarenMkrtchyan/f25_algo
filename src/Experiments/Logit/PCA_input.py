@@ -16,8 +16,11 @@ dataset = build_dataset(n=100, low=1000, high=9999)
 
 #model_name = "pythia-70m"
 #model_name = "qwen2.5-3b"
-model_name = "qwen3-1.7b"
+#model_name = "qwen3-1.7b"
 #model_name = "phi-3"
+#model_name = "gemma-2-9b-it"
+model_name = "llama3-8b-it"
+
 model = load_model(model_name)
 model.set_use_attn_result(True)
 device = get_device()
