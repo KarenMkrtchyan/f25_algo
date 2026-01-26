@@ -1151,9 +1151,9 @@ def plot_resid_patch_bar(patch_effects, output_path="./figures"):
 def plot_all_patch_effects(patch_effects, output_path="./figures", save_name="patch_summary.png"):
     os.makedirs(output_path, exist_ok=True)
 
-    resid = patch_effects["resid_post"].detach().cpu().numpy()
-    mlp = patch_effects["mlp"].detach().cpu().numpy()
-    attn_heads = patch_effects["attn_heads"].detach().cpu().numpy()
+    resid = patch_effects["resid_post"].detach().float().cpu().numpy()
+    mlp = patch_effects["mlp"].detach().float().cpu().numpy()
+    attn_heads = patch_effects["attn_heads"].detach().float().cpu().numpy()
 
     num_layers = attn_heads.shape[0]
     num_heads = attn_heads.shape[1]
@@ -1846,8 +1846,8 @@ def plot_head_PCA(
                 break
 
     # Stack on CPU
-    clean_mat = t.cat(clean_outputs, dim=0)[:max_points].numpy()
-    corrupt_mat = t.cat(corrupt_outputs, dim=0)[:max_points].numpy()
+    clean_mat = t.cat(clean_outputs, dim=0)[:max_points].float().cpu().numpy()
+    corrupt_mat = t.cat(corrupt_outputs, dim=0)[:max_points].float().cpu().numpy()
 
     X = np.vstack([clean_mat, corrupt_mat])
     y = np.array([1]*len(clean_mat) + [0]*len(corrupt_mat))
@@ -1944,8 +1944,8 @@ def plot_head_input_PCA(
                 break
 
     # Stack on CPU
-    clean_mat = t.cat(clean_inputs, dim=0)[:max_points].numpy()
-    corrupt_mat = t.cat(corrupt_inputs, dim=0)[:max_points].numpy()
+    clean_mat = t.cat(clean_inputs, dim=0)[:max_points].float().cpu().numpy()
+    corrupt_mat = t.cat(corrupt_inputs, dim=0)[:max_points].float().cpu().numpy()
 
     X = np.vstack([clean_mat, corrupt_mat])
     y = np.array([1]*len(clean_mat) + [0]*len(corrupt_mat))
