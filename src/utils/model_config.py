@@ -80,6 +80,7 @@ def get_model_config(model_name: str) -> Dict[str, Any]:
 def load_model(
     model_name: str, 
     target_device: Optional[str] = None,
+    torch_dtype: Optional[t.dtype] = None,
     **kwargs
 ) -> HookedTransformer:
     if target_device is None:
@@ -92,6 +93,7 @@ def load_model(
             model = HookedTransformer.from_pretrained(
                 config["model_name"],
                 device=target_device,
+                torch_dtype=torch_dtype,
                 **kwargs
             )
         else:
@@ -102,6 +104,7 @@ def load_model(
             model = HookedTransformer.from_pretrained(
                 model_name,
                 device=target_device,
+                torch_dtype=torch_dtype,
                 **kwargs
             )
         except Exception as e:
