@@ -4,7 +4,7 @@ dataset_path: parquet
 dataset_name: null
 dataset_kwargs:
   data_files:
-    - "../../../output/data-4-digit-00000.parquet"
+    - "/home/ubuntu/f25_algo/output/data-4-digit-00000.parquet"
 validation_split: train
 output_type: multiple_choice
 doc_to_text: "Is {{a}} > {{b}}? Answer:"
