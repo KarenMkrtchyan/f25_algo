@@ -26,7 +26,7 @@ dataset = build_dataset_space(n=100, low=1000, high=9999)
 #model_name = "qwen2.5-7b"
 model_name = "qwen1.5-4b"
 
-model = load_model(model_name, torch_dtype = t.bfloat16)
+model = load_model(model_name, torch_dtype = t.float32)
 device = get_device()
 
 #yes_id = model.to_single_token(" Yes")
