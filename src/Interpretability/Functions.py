@@ -2757,7 +2757,7 @@ def validate_dla_blocks_only(
     ), (
         "❌ Block DLA does not match true block contribution:\n"
         f"DLA={ (dla_attn.sum()+dla_mlp.sum()).item():.4f}, "
-        f"True={ block_total.item():.4f }"
+        f"True={ block_total.item():.4f}"
     )
 
     # ============================
