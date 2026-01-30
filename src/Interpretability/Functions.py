@@ -2658,7 +2658,7 @@ def plot_all_dla_effects_paper(model, dla_resid, dla_attn, dla_mlp, dla_heads, o
     fig_blocks = imshow(
         stack,
         facet_col=0,
-        facet_labels=["Residual Stream","Attn Output","MLP Output"],
+        facet_labels=["Attn Output","MLP Output"],
         y=y_labels, x=x_pos,
         zmin=-stack.abs().max().item(),
         zmax=stack.abs().max().item(),
@@ -2694,14 +2694,108 @@ def full_dla_pipeline_normalized(model, clean_batches, corrupt_batches, yes_id, 
     print("Running DLA on clean batches...")
     dla_clean_results = direct_logit_attribution_all_positions_normalized(model, clean_batches, yes_id, no_id)
     dla_resid_clean, dla_attn_clean, dla_mlp_clean, dla_heads_clean = compute_dla_difference_all_positions(dla_clean_results, mode="yes_no")
-    plot_all_dla_effects_paper(model, dla_resid_clean, dla_attn_clean, dla_mlp_clean, dla_heads_clean, os.path.join(output_folder,"clean"), title_prefix="Direct Logit Attribution (Yes−No)")
+    plot_all_dla_effects_paper(model, None, dla_attn_clean, dla_mlp_clean, dla_heads_clean, os.path.join(output_folder,"clean"), title_prefix="Direct Logit Attribution (Yes−No)")
     save_head_contributions_csv(dla_heads_clean, os.path.join(output_folder,"clean"))
 
     # --- Corrupt ---
     print("Running DLA on corrupt batches...")
     dla_corrupt_results = direct_logit_attribution_all_positions_normalized(model, corrupt_batches, yes_id, no_id)
     dla_resid_corrupt, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt = compute_dla_difference_all_positions(dla_corrupt_results, mode="no_yes")
-    plot_all_dla_effects_paper(model, dla_resid_corrupt, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt, os.path.join(output_folder,"corrupt"), title_prefix="Direct Logit Attribution (No−Yes)")
+    plot_all_dla_effects_paper(model, None, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt, os.path.join(output_folder,"corrupt"), title_prefix="Direct Logit Attribution (No−Yes)")
     save_head_contributions_csv(dla_heads_corrupt, os.path.join(output_folder,"corrupt"))
 
+    return dla_attn_clean, dla_mlp_clean, dla_heads_clean, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt
+
+import torch as t
+
+@t.no_grad()
+def validate_dla(
+    model,
+    tokens,
+    yes_id: int,
+    no_id: int,
+    dla_attn: t.Tensor,   # [layers]
+    dla_mlp: t.Tensor,    # [layers]
+    dla_heads: t.Tensor,  # [layers, heads]
+    token_position: int = -1,
+    atol: float = 1e-3,
+):
+    """
+    Validates Direct Logit Attribution via multiple conservation checks.
+    Raises AssertionError if something is wrong.
+    """
+
+    device = model.cfg.device
+    tokens = tokens.to(device)
+
+    # ============================
+    # Forward pass
+    # ============================
+    logits, cache = model.run_with_cache(tokens)
+
+    # Logit diff direction
+    true_logit_diff = (
+        logits[0, token_position, yes_id]
+        - logits[0, token_position, no_id]
+    )
+
+    w = model.W_U[:, yes_id] - model.W_U[:, no_id]
+
+    # ============================
+    # Reconstruct from cache
+    # ============================
+    attn_sum = t.zeros((), device=device)
+    mlp_sum  = t.zeros((), device=device)
+
+    for l in range(model.cfg.n_layers):
+        attn_out = cache[f"blocks.{l}.hook_attn_out"][0, token_position]
+        mlp_out  = cache[f"blocks.{l}.hook_mlp_out"][0, token_position]
+        attn_sum += attn_out @ w
+        mlp_sum  += mlp_out @ w
+
+    resid_pre = cache["resid_pre"][0, token_position]
+    recon = resid_pre @ w + attn_sum + mlp_sum
+
+    # ============================
+    # CHECK 1: Logit reconstruction
+    # ============================
+    assert t.allclose(
+        recon, true_logit_diff, atol=atol
+    ), (
+        f"❌ Logit reconstruction failed:\n"
+        f"reconstructed={recon.item():.4f}, "
+        f"true={true_logit_diff.item():.4f}"
+    )
+
+    # ============================
+    # CHECK 2: Attn/MLP sums match DLA
+    # ============================
+    assert t.allclose(
+        dla_attn.sum(), attn_sum, atol=atol
+    ), "❌ Attention DLA does not sum to attention contribution"
+
+    assert t.allclose(
+        dla_mlp.sum(), mlp_sum, atol=atol
+    ), "❌ MLP DLA does not sum to MLP contribution"
+
+    # ============================
+    # CHECK 3: Heads sum to attention
+    # ============================
+    head_sum = dla_heads.sum(dim=1)  # sum over heads
+    assert t.allclose(
+        head_sum, dla_attn, atol=atol
+    ), "❌ Head DLA does not sum to attention DLA"
+
+    # ============================
+    # CHECK 4: Direction sanity
+    # ============================
+    total_dla = dla_attn.sum() + dla_mlp.sum()
+    assert t.sign(total_dla) == t.sign(true_logit_diff), (
+        "❌ DLA direction does not match true logit direction"
+    )
+
+    print("✅ DLA VALIDATION PASSED")
+    print(f"   True logit diff: {true_logit_diff.item():.4f}")
+    print(f"   Reconstructed  : {recon.item():.4f}")
+    print(f"   Total DLA      : {total_dla.item():.4f}")
 

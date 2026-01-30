@@ -70,7 +70,8 @@ from .Functions import (
     collect_final_logits,
     plot_head_input_PCA,
     full_dla_pipeline_all_positions,
-    full_dla_pipeline_normalized
+    full_dla_pipeline_normalized,
+    validate_dla
 )
 
 # Version information

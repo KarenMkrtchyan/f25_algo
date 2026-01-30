@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from utils.model_config import load_model
 from utils.device_utils import get_device
-from Interpretability import build_dataset, build_dataset_space, build_numeric_batches, compute_baselines, numeric_metric, full_dla_pipeline_all_positions, full_dla_pipeline_normalized
+from Interpretability import build_dataset, build_dataset_space, build_numeric_batches, compute_baselines, numeric_metric, full_dla_pipeline_all_positions, full_dla_pipeline_normalized, validate_dla
 import transformer_lens.utils as utils
 
 dataset = build_dataset(n=100, low=1000, high=9999)
@@ -40,4 +40,29 @@ output_folder = os.path.join(digit_folder, f"{model_name}")
 dla_folder = os.path.join(output_folder, "DLA")
 os.makedirs(dla_folder, exist_ok=True)
 
-full_dla_pipeline_normalized(model, batches_base, batches_src, yes_id, no_id, output_folder = dla_folder)
+dla_attn_clean, dla_mlp_clean, dla_heads_clean, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt = full_dla_pipeline_normalized(model, batches_base, batches_src, yes_id, no_id, output_folder = dla_folder)
+
+tokens_1 = model.to_tokens("Is 9876 > 5432? Answer:")
+tokens_2 = model.to_tokens("Is 5432 > 9876? Answer:")
+
+validate_dla(
+    model=model,
+    tokens=tokens_1,
+    yes_id=yes_id,
+    no_id=no_id,
+    dla_attn=dla_attn_clean,
+    dla_mlp=dla_mlp_clean,
+    dla_heads=dla_heads_clean,
+    token_position=-1
+)
+
+validate_dla(
+    model=model,
+    tokens=tokens_2,
+    yes_id=no_id,
+    no_id=yes_id,
+    dla_attn=dla_attn_corrupt,
+    dla_mlp=dla_mlp_corrupt,
+    dla_heads=dla_heads_corrupt,
+    token_position=-1
+)
