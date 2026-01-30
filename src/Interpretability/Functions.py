@@ -2725,6 +2725,10 @@ def validate_dla_blocks_only(
 
     logits, cache = model.run_with_cache(tokens)
 
+    dla_attn = dla_attn / 100
+    dla_mlp  = dla_mlp / 100
+    dla_heads= dla_heads / 100
+
     # True logit diff
     true_logit_diff = (
         logits[0, token_position, yes_id]
