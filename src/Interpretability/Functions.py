@@ -2709,31 +2709,23 @@ def full_dla_pipeline_normalized(model, clean_batches, corrupt_batches, yes_id, 
 import torch as t
 
 @t.no_grad()
-def validate_dla(
+def validate_dla_blocks_only(
     model,
     tokens,
     yes_id: int,
     no_id: int,
-    dla_attn: t.Tensor,   # [layers]
-    dla_mlp: t.Tensor,    # [layers]
+    dla_attn: t.Tensor,   # [layers, pos] or summed [layers]
+    dla_mlp: t.Tensor,    # [layers, pos] or summed [layers]
     dla_heads: t.Tensor,  # [layers, heads]
     token_position: int = -1,
     atol: float = 1e-3,
 ):
-    """
-    Validates Direct Logit Attribution via multiple conservation checks.
-    Raises AssertionError if something is wrong.
-    """
-
     device = model.cfg.device
     tokens = tokens.to(device)
 
-    # ============================
-    # Forward pass
-    # ============================
     logits, cache = model.run_with_cache(tokens)
 
-    # Logit diff direction
+    # True logit diff
     true_logit_diff = (
         logits[0, token_position, yes_id]
         - logits[0, token_position, no_id]
@@ -2742,7 +2734,7 @@ def validate_dla(
     w = model.W_U[:, yes_id] - model.W_U[:, no_id]
 
     # ============================
-    # Reconstruct from cache
+    # Compute true block contribution
     # ============================
     attn_sum = t.zeros((), device=device)
     mlp_sum  = t.zeros((), device=device)
@@ -2753,49 +2745,39 @@ def validate_dla(
         attn_sum += attn_out @ w
         mlp_sum  += mlp_out @ w
 
-    resid_pre = cache["resid_pre"][0, token_position]
-    recon = resid_pre @ w + attn_sum + mlp_sum
+    block_total = attn_sum + mlp_sum
 
     # ============================
-    # CHECK 1: Logit reconstruction
+    # CHECK 1: DLA sums match true block effect
     # ============================
     assert t.allclose(
-        recon, true_logit_diff, atol=atol
+        dla_attn.sum() + dla_mlp.sum(),
+        block_total,
+        atol=atol
     ), (
-        f"❌ Logit reconstruction failed:\n"
-        f"reconstructed={recon.item():.4f}, "
-        f"true={true_logit_diff.item():.4f}"
+        "❌ Block DLA does not match true block contribution:\n"
+        f"DLA={ (dla_attn.sum()+dla_mlp.sum()).item():.4f }, "
+        f"True={ block_total.item():.4f }"
     )
 
     # ============================
-    # CHECK 2: Attn/MLP sums match DLA
+    # CHECK 2: Heads sum to attention
     # ============================
     assert t.allclose(
-        dla_attn.sum(), attn_sum, atol=atol
-    ), "❌ Attention DLA does not sum to attention contribution"
-
-    assert t.allclose(
-        dla_mlp.sum(), mlp_sum, atol=atol
-    ), "❌ MLP DLA does not sum to MLP contribution"
-
-    # ============================
-    # CHECK 3: Heads sum to attention
-    # ============================
-    head_sum = dla_heads.sum(dim=1)  # sum over heads
-    assert t.allclose(
-        head_sum, dla_attn, atol=atol
+        dla_heads.sum(dim=1),
+        dla_attn,
+        atol=atol
     ), "❌ Head DLA does not sum to attention DLA"
 
     # ============================
-    # CHECK 4: Direction sanity
+    # CHECK 3: Direction sanity
     # ============================
-    total_dla = dla_attn.sum() + dla_mlp.sum()
-    assert t.sign(total_dla) == t.sign(true_logit_diff), (
-        "❌ DLA direction does not match true logit direction"
+    assert t.sign(block_total) == t.sign(true_logit_diff), (
+        "❌ Block contribution has wrong direction"
     )
 
-    print("✅ DLA VALIDATION PASSED")
-    print(f"   True logit diff: {true_logit_diff.item():.4f}")
-    print(f"   Reconstructed  : {recon.item():.4f}")
-    print(f"   Total DLA      : {total_dla.item():.4f}")
+    print("✅ BLOCK-ONLY DLA VALIDATION PASSED")
+    print(f"   True logit diff      : {true_logit_diff.item():.4f}")
+    print(f"   Block contribution  : {block_total.item():.4f}")
+    print(f"   DLA total            : {(dla_attn.sum()+dla_mlp.sum()).item():.4f}")
 

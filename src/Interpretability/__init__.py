@@ -71,7 +71,7 @@ from .Functions import (
     plot_head_input_PCA,
     full_dla_pipeline_all_positions,
     full_dla_pipeline_normalized,
-    validate_dla
+    validate_dla_blocks_only
 )
 
 # Version information

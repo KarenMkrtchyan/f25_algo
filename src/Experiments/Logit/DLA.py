@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 
 from utils.model_config import load_model
 from utils.device_utils import get_device
-from Interpretability import build_dataset, build_dataset_space, build_numeric_batches, compute_baselines, numeric_metric, full_dla_pipeline_all_positions, full_dla_pipeline_normalized, validate_dla
+from Interpretability import build_dataset, build_dataset_space, build_numeric_batches, compute_baselines, numeric_metric, full_dla_pipeline_all_positions, full_dla_pipeline_normalized, validate_dla_blocks_only
 import transformer_lens.utils as utils
 
 dataset = build_dataset(n=100, low=1000, high=9999)
@@ -45,7 +45,7 @@ dla_attn_clean, dla_mlp_clean, dla_heads_clean, dla_attn_corrupt, dla_mlp_corrup
 tokens_1 = model.to_tokens("Is 9876 > 5432? Answer:")
 tokens_2 = model.to_tokens("Is 5432 > 9876? Answer:")
 
-validate_dla(
+validate_dla_blocks_only(
     model=model,
     tokens=tokens_1,
     yes_id=yes_id,
@@ -56,7 +56,7 @@ validate_dla(
     token_position=-1
 )
 
-validate_dla(
+validate_dla_blocks_only(
     model=model,
     tokens=tokens_2,
     yes_id=no_id,
