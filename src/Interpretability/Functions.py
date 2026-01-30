@@ -2654,7 +2654,7 @@ def plot_all_dla_effects_paper(model, dla_resid, dla_attn, dla_mlp, dla_heads, o
     x_heads = [f"H{i}" for i in range(n_heads)]
 
     # Blocks figure
-    stack = t.stack([resid, attn, mlp], dim=0)
+    stack = t.stack([attn, mlp], dim=0)
     fig_blocks = imshow(
         stack,
         facet_col=0,
@@ -2694,14 +2694,14 @@ def full_dla_pipeline_normalized(model, clean_batches, corrupt_batches, yes_id, 
     print("Running DLA on clean batches...")
     dla_clean_results = direct_logit_attribution_all_positions_normalized(model, clean_batches, yes_id, no_id)
     dla_resid_clean, dla_attn_clean, dla_mlp_clean, dla_heads_clean = compute_dla_difference_all_positions(dla_clean_results, mode="yes_no")
-    plot_all_dla_effects_paper(model, None, dla_attn_clean, dla_mlp_clean, dla_heads_clean, os.path.join(output_folder,"clean"), title_prefix="Direct Logit Attribution (Yes−No)")
+    plot_all_dla_effects_paper(model, dla_resid_clean, dla_attn_clean, dla_mlp_clean, dla_heads_clean, os.path.join(output_folder,"clean"), title_prefix="Direct Logit Attribution (Yes−No)")
     save_head_contributions_csv(dla_heads_clean, os.path.join(output_folder,"clean"))
 
     # --- Corrupt ---
     print("Running DLA on corrupt batches...")
     dla_corrupt_results = direct_logit_attribution_all_positions_normalized(model, corrupt_batches, yes_id, no_id)
     dla_resid_corrupt, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt = compute_dla_difference_all_positions(dla_corrupt_results, mode="no_yes")
-    plot_all_dla_effects_paper(model, None, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt, os.path.join(output_folder,"corrupt"), title_prefix="Direct Logit Attribution (No−Yes)")
+    plot_all_dla_effects_paper(model, dla_resid_corrupt, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt, os.path.join(output_folder,"corrupt"), title_prefix="Direct Logit Attribution (No−Yes)")
     save_head_contributions_csv(dla_heads_corrupt, os.path.join(output_folder,"corrupt"))
 
     return dla_attn_clean, dla_mlp_clean, dla_heads_clean, dla_attn_corrupt, dla_mlp_corrupt, dla_heads_corrupt
