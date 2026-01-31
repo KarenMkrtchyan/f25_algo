@@ -15,8 +15,8 @@ import transformer_lens.utils as utils
 dataset = build_dataset(n=100, low=1000, high=9999)
 
 #model_name = "pythia-70m"
-model_name = "qwen2.5-3b"
-#model_name = "qwen3-1.7b"
+#model_name = "qwen2.5-3b"
+model_name = "qwen3-1.7b"
 #model_name = "qwen3-4b"
 #model_name = "phi-3"
 #model_name = "gemma-2-9b-it"
@@ -35,8 +35,8 @@ no_id = model.to_single_token(" No")
 #yes_id = model.to_single_token("Yes")
 #no_id = model.to_single_token("No")
 
-Attention_Layers = [24, 24]
-Attention_Heads = [5, 7]
+Attention_Layers = [0, 13, 15, 17, 17, 17, 24]
+Attention_Heads = [7, 11, 9, 0, 1, 11, 9]
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
 num_batches = len(batches_src)
