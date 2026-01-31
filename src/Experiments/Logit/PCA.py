@@ -23,8 +23,8 @@ model_name = "qwen3-4b"
 #model_name = "llama3-8b-it"
 #model_name = "qwen2.5-7b"
 
-dtype = t.float32
-#dtype = t.bfloat16
+#dtype = t.float32
+dtype = t.bfloat16
 
 model = load_model(model_name, torch_dtype=dtype)
 model.set_use_attn_result(True)
