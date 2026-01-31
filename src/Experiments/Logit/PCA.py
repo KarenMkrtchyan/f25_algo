@@ -16,15 +16,15 @@ dataset = build_dataset(n=100, low=1000, high=9999)
 
 #model_name = "pythia-70m"
 #model_name = "qwen2.5-3b"
-model_name = "qwen3-1.7b"
+#model_name = "qwen3-1.7b"
 #model_name = "qwen3-4b"
 #model_name = "phi-3"
 #model_name = "gemma-2-9b-it"
-#model_name = "llama3-8b-it"
+model_name = "llama3-8b-it"
 #model_name = "qwen2.5-7b"
 
-dtype = t.float32
-#dtype = t.bfloat16
+#dtype = t.float32
+dtype = t.bfloat16
 
 model = load_model(model_name, torch_dtype=dtype)
 model.set_use_attn_result(True)
@@ -35,8 +35,8 @@ no_id = model.to_single_token(" No")
 #yes_id = model.to_single_token("Yes")
 #no_id = model.to_single_token("No")
 
-Attention_Layers = [0, 13, 15, 17, 17, 17, 24]
-Attention_Heads = [7, 11, 9, 0, 1, 11, 9]
+Attention_Layers = [21, 28, 28, 30, 31]
+Attention_Heads = [9, 10, 5, 1, 3]
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
 num_batches = len(batches_src)
