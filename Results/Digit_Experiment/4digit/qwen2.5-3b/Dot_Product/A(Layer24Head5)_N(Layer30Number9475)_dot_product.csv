@@ -1,0 +1,3 @@
+Value,Condition
+0.3014304041862488,Clean (a>b → Yes)
+0.04200261831283569,Corrupt (b>a → No)
