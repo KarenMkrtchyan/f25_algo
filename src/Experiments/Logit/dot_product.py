@@ -30,15 +30,16 @@ num_batches = len(batches_src)
 print(f"Batched into {num_batches} batches")
 print("\n")
 
-Attention_L = 4
-Attention_H = 6
-Neuron_L = 5
-Neuron_num = 880
+Attention_L = 24
+Attention_H = 5
+Neuron_L = 30
+Neuron_num = 9475
 
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "4digit")
-output_folder = os.path.join(digit_folder, f"{model_name}")
+model_folder = os.path.join(digit_folder, f"{model_name}")
+output_folder = os.path.join(model_folder, "Dot_Product")
 os.makedirs(output_folder, exist_ok=True)
 plot_path = os.path.join(output_folder, f"A(Layer{Attention_L}Head{Attention_H})_N(Layer{Neuron_L}Number{Neuron_num})_dot_product.png")
 csv_path = os.path.join(output_folder, f"A(Layer{Attention_L}Head{Attention_H})_N(Layer{Neuron_L}Number{Neuron_num})_dot_product.csv")
