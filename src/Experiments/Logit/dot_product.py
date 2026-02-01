@@ -32,8 +32,8 @@ print("\n")
 
 Attention_L = 24
 Attention_H = 7
-Neuron_L = 30
-Neuron_num = 9475
+Neuron_L = 31
+Neuron_num = 8338
 
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
