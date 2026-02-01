@@ -31,7 +31,7 @@ print(f"Batched into {num_batches} batches")
 print("\n")
 
 Attention_L = 24
-Attention_H = 7
+Attention_H = 5
 Neuron_L = 31
 Neuron_num = 8338
 
