@@ -18,6 +18,8 @@ import plotly.express as px
 
 # %%
 
+# Code from https://github.com/callummcdougall/path_patching
+
 _SeqPos = Optional[Int[Tensor, "batch pos"]]
 SeqPos = Optional[Union[int, List[int], Int[Tensor, "batch *pos"]]]
 IterSeqPos = Union[SeqPos, Literal["each"]]

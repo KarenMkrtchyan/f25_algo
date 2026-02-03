@@ -24,7 +24,7 @@ login(token=hf_key)
 #%%
 
 model = HookedTransformer.from_pretrained(
-    "google/gemma-2-9b-it",
+    "Qwen/Qwen3-1.7b",
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
@@ -44,22 +44,21 @@ labels = [p["clean_label"] for p in prompt_list]
 
 # Define the answers for each prompt, in the form (correct, incorrect)
 #%%
-answers = [("Yes", "No") if label == "Yes" else ("No", "Yes") for label in labels]
+answers = [(" Yes", " No") if label == " Yes" else (" No", " Yes") for label in labels]
 
 # Define the answer tokens (same shape as the answers)
-yes_id = model.to_single_token("Yes")
-no_id  = model.to_single_token("No")
+yes_id = model.to_single_token(" Yes")
+no_id  = model.to_single_token(" No")
 
 answer_tokens = []
 for label in labels:
-    if label == "Yes":
+    if label == " Yes":
         answer_tokens.append([yes_id, no_id])
     else:
         answer_tokens.append([no_id, yes_id])
 answer_tokens = t.tensor(answer_tokens, device=device)
 
 #%%
-
 
 def patching_filter(name):
     if any(n in name for n in ["resid_pre", "attn_out", "mlp_out", "z"]):
@@ -125,7 +124,7 @@ def greater_than_metric_noising(
     patched_logit_diff = logits_to_ave_logit_diff(logits, answer_tokens)
     return ((patched_logit_diff - flipped_logit_diff) / (clean_logit_diff - flipped_logit_diff)).item()
 
-labels =[f"{tok} {i}" for i, tok in enumerate(model.to_str_tokens(clean_tokens[0]))]
+labels =[f"{tok} ({i})" for i, tok in enumerate(model.to_str_tokens(clean_tokens[0]))]
 
 # %%
 
