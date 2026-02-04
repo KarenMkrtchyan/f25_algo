@@ -160,7 +160,8 @@ fig_blocks = imshow(
     coloraxis=dict(colorbar_ticksuffix = "%"),
     border=True,
     width=1300,
-    margin={"r": 100, "l": 100}
+    margin={"r": 100, "l": 100},
+    return_fig = True
 )
 fig_blocks.write_image(block_path)
 # %% Attnetion head output
@@ -181,7 +182,8 @@ fig_heads = imshow(
     coloraxis=dict(colorbar_ticksuffix = "%"),
     border=True,
     width=600,
-    margin={"r": 100, "l": 100}
+    margin={"r": 100, "l": 100},
+    return_fig = True
 )
 fig_heads.write_image(head_path)
 
