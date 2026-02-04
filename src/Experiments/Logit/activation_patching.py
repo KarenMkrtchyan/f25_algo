@@ -71,7 +71,7 @@ print(patch_full.shape)
 print("Activation patching complete!")
 print("\n")
 
-tokens_str = model.to_str_tokens(model.to_tokens("Is 5678 > 1234? Answer:"))
+tokens_str = model.to_str_tokens(model.to_tokens("Is 56 > 34? Answer:"))
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
 digit_folder = os.path.join(display_folder, "2digit")
