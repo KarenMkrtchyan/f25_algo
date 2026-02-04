@@ -14,11 +14,11 @@ from Interpretability import build_dataset, build_dataset_space, compute_act_pat
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
-dataset = build_dataset(n=1, low=1000, high=9999)
+dataset = build_dataset(n=100, low=1000, high=9999)
 #dataset = build_dataset_space(n=100, low=1000, high=9999)
 
-model_name = "pythia-70m"
-#model_name = "qwen2.5-3b"
+#model_name = "pythia-70m"
+model_name = "qwen2.5-3b"
 #model_name = "qwen3-1.7b"
 #model_name = "phi-3"
 #model_name = "gemma-2-9b-it"
@@ -27,7 +27,7 @@ model_name = "pythia-70m"
 #model_name = "qwen1.5-4b"
 #model_name = "qwen3-4b"
 
-model = load_model(model_name, torch_dtype = t.float32)
+model = load_model(model_name, torch_dtype = t.bfloat16)
 device = get_device()
 
 yes_id = model.to_single_token(" Yes")

@@ -1372,6 +1372,9 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
     """
     os.makedirs(output_folder, exist_ok=True)
 
+    COMMON_HEIGHT = 700
+    COMMON_MARGIN = dict(l=90, r=40, t=70, b=200)
+
     num_layers = model.cfg.n_layers
     num_pos = patch_resid.size(1)
     num_heads = patch_heads.size(1)
@@ -1404,6 +1407,15 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
         color_continuous_scale="RdBu",
         return_fig=True
     )
+    fig_blocks.update_layout(
+        autosize=False,
+        height=COMMON_HEIGHT
+    )
+    fig_blocks.update_layout(margin=COMMON_MARGIN)
+    fig_blocks.for_each_annotation(
+        lambda a: a.update(y=1.02)
+    )
+    fig_blocks.update_yaxes(domain=[0, 1])
     fig_blocks.update_yaxes(title_text="Layer")
     fig_blocks.update_xaxes(tickangle=45)
     fig_blocks.layout.xaxis1.title = ""
@@ -1415,7 +1427,7 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
     fig_blocks.show()
 
     blocks_path = os.path.join(output_folder, "patch_blocks.png")
-    fig_blocks.write_image(blocks_path, scale=3, width=1100, height=600)
+    fig_blocks.write_image(blocks_path, scale=3, width=1100, height=COMMON_HEIGHT)
     print(f"Saved: {blocks_path}")
 
     # ============ RIGHT FIGURE (heads) ============
@@ -1430,20 +1442,26 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
     fig_heads.add_annotation(
         text="Attention Heads Patch Effects (Last Position)",
         x=0.5,
-        y=1.05,
+        y=1.06,
         xref="paper",
         yref="paper",
         showarrow=False,
         font=dict(size=16),
         align="center"
     )
+    fig_heads.update_layout(
+        autosize=False,
+        height=COMMON_HEIGHT
+    )
+    fig_heads.update_layout(margin=COMMON_MARGIN)
+    fig_heads.update_yaxes(domain=[0, 1])
     fig_heads.update_yaxes(title_text="Layer")
     fig_heads.update_xaxes(tickangle=45, title_text="Head")
     fig_heads.update_coloraxes(colorbar=dict(title=dict(text="Δ Logit Diff", side="top")))
     fig_heads.show()
 
     heads_path = os.path.join(output_folder, "patch_heads.png")
-    fig_heads.write_image(heads_path, scale=3, width=700, height=600)
+    fig_heads.write_image(heads_path, scale=3, width=600, height=COMMON_HEIGHT)
     print(f"Saved: {heads_path}")
 
 def head_mean_ablation_hook_by_pos(
