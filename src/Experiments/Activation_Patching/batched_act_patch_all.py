@@ -23,8 +23,10 @@ login(token=hf_key)
 
 #%%
 
+model_name = "EleutherAI/pythia-70m-deduped"
+
 model = HookedTransformer.from_pretrained(
-    "Qwen/Qwen3-1.7b",
+    model_name,
     center_unembed=True,
     center_writing_weights=True,
     fold_ln=True,
@@ -166,7 +168,6 @@ results = act_patch(
 
 imshow(
     results['z'] * 100,
-    title="Attn head output",
     labels={"x": "Head", "y": "Layer", "color": "Logit diff variation"},
     coloraxis=dict(colorbar_ticksuffix = "%"),
     border=True,

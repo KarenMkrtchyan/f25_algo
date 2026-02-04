@@ -1382,8 +1382,13 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
     mlp = t.flip(patch_mlp, dims=[0])
     heads = t.flip(patch_heads, dims=[0])
 
+    tokens = model.to_str_tokens(model.to_tokens("Is 5678 > 1234? Answer:"))
+
+    def pretty(tok):
+        return tok.replace("Ġ", "▁") if tok.strip() else "<BOS>"
+
     y_labels = [f"L{L}" for L in range(num_layers - 1, -1, -1)]
-    x_pos = [f"pos {i}" for i in range(num_pos)]
+    x_pos = [f"{i}: {pretty(tok)}" for i, tok in enumerate(tokens)]
     x_heads = [f"H{i}" for i in range(num_heads)]
 
     # ============ LEFT FIGURE (3 components shared) ============
@@ -1397,11 +1402,16 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
         x=x_pos,
         zmin=-1, zmax=1,
         color_continuous_scale="RdBu",
-        title="Residual / Attention / MLP Patch Effects",
         return_fig=True
     )
+    fig_blocks.update_yaxes(title_text="Layer")
     fig_blocks.update_xaxes(tickangle=45)
-    fig_blocks.update_coloraxes(colorbar=dict(title="Δ Logit Diff"))
+    fig_blocks.layout.xaxis1.title = ""
+    fig_blocks.layout.xaxis2.title = "Sequence Position / Token"
+    fig_blocks.layout.xaxis3.title = ""
+    fig_blocks.layout.yaxis2.title = ""
+    fig_blocks.layout.yaxis3.title = ""
+    fig_blocks.update_coloraxes(colorbar=dict(title=dict(text="Δ Logit Diff", side="top")))
     fig_blocks.show()
 
     blocks_path = os.path.join(output_folder, "patch_blocks.png")
@@ -1415,11 +1425,21 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
         x=x_heads,
         zmin=-1, zmax=1,
         color_continuous_scale="RdBu",
-        title="Attention Heads Patch Effects (Last Position)",
         return_fig=True
     )
-    fig_heads.update_xaxes(tickangle=45)
-    fig_heads.update_coloraxes(colorbar=dict(title="Δ Logit Diff"))
+    fig_heads.add_annotation(
+        text="Attention Heads Patch Effects (Last Position)",
+        x=0.5,
+        y=1.05,
+        xref="paper",
+        yref="paper",
+        showarrow=False,
+        font=dict(size=16),
+        align="center"
+    )
+    fig_heads.update_yaxes(title_text="Layer")
+    fig_heads.update_xaxes(tickangle=45, title_text="Head")
+    fig_heads.update_coloraxes(colorbar=dict(title=dict(text="Δ Logit Diff", side="top")))
     fig_heads.show()
 
     heads_path = os.path.join(output_folder, "patch_heads.png")
