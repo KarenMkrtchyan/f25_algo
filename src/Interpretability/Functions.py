@@ -2333,6 +2333,8 @@ def plot_all_dla_effects_paper(model, dla_resid, dla_attn, dla_mlp, dla_heads, o
     """
     os.makedirs(output_folder, exist_ok=True)
 
+    COMMON_MARGIN = dict(l=70, r=20, t=60, b=40)
+
     num_layers = model.cfg.n_layers
     num_pos = dla_resid.size(1)
     num_heads = dla_heads.size(1)
@@ -2362,10 +2364,20 @@ def plot_all_dla_effects_paper(model, dla_resid, dla_attn, dla_mlp, dla_heads, o
         title=f"{title_prefix} (Blocks)",
         return_fig=True
     )
+    fig_blocks.update_layout(
+        autosize=False,
+        height=500
+    )
+    fig_blocks.update_layout(margin=COMMON_MARGIN)
+    fig_blocks.update_layout(
+        grid=dict(roworder="top to bottom"),
+        facet_col_spacing=0.02
+    )
+    fig_blocks.update_yaxes(domain=[0, 1])
     fig_blocks.update_xaxes(tickangle=45)
     fig_blocks.update_coloraxes(colorbar=dict(title="Logit Contribution"))
     fig_blocks.show()
-    fig_blocks.write_image(os.path.join(output_folder, "dla_blocks.png"), scale=3, width=1100, height=600)
+    fig_blocks.write_image(os.path.join(output_folder, "dla_blocks.png"), scale=3, width=1000, height=500)
 
     # ============ RIGHT FIGURE (heads) ============
     fig_heads = imshow(
@@ -2378,10 +2390,16 @@ def plot_all_dla_effects_paper(model, dla_resid, dla_attn, dla_mlp, dla_heads, o
         title=f"{title_prefix} (Heads)",
         return_fig=True
     )
+    fig_heads.update_layout(
+        autosize=False,
+        height=500
+    )
+    fig_heads.update_layout(margin=COMMON_MARGIN)
+    fig_heads.update_yaxes(domain=[0, 1])
     fig_heads.update_xaxes(tickangle=45)
     fig_heads.update_coloraxes(colorbar=dict(title="Logit Contribution"))
     fig_heads.show()
-    fig_heads.write_image(os.path.join(output_folder, "dla_heads.png"), scale=3, width=700, height=600)
+    fig_heads.write_image(os.path.join(output_folder, "dla_heads.png"), scale=3, width=600, height=500)
 
 def direct_logit_attribution_all_positions(
     model,
