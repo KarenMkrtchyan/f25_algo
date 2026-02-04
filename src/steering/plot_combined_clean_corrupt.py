@@ -1,3 +1,4 @@
+# src/steering/plot_combined_clean_corrupt.py
 import argparse
 import os
 import pandas as pd
@@ -13,18 +14,30 @@ def signed_alpha(alpha_mag: float, direction: str) -> float:
     return float(alpha_mag)
 
 
-def plot_panel(ax, df_panel, title, colors):
+def prompt_label(prompt_type: str) -> str:
+    return "Greater-Than prompts" if prompt_type == "clean" else "Less-Than prompts"
+
+
+def plot_panel(ax, df_panel: pd.DataFrame, panel_title: str):
+    # Use explicit colors (kept from your original)
+    colors = {"minus": "tab:blue", "plus": "tab:orange"}
+
     # Plot both directions on same axes
     for direction in ["minus", "plus"]:
         g = df_panel[df_panel["direction"] == direction]
         if len(g) == 0:
             continue
+
+        alpha_mag = float(g["alpha"].iloc[0])
+        a_signed = signed_alpha(alpha_mag, direction)
+        label = f"{'−α' if direction=='minus' else '+α'} (α={a_signed:+.0f})"
+
         ax.scatter(
             g["base_margin"].to_numpy(),
             g["steered_margin"].to_numpy(),
             s=18,
             alpha=0.75,
-            label=f"{direction} (α={signed_alpha(g['alpha'].iloc[0], direction):+.1f})",
+            label=label,
             color=colors[direction],
         )
 
@@ -37,7 +50,7 @@ def plot_panel(ax, df_panel, title, colors):
 
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
-    ax.set_title(title)
+    ax.set_title(panel_title)
     ax.set_xlabel("base_margin = logp(Yes) - logp(No)")
     ax.set_ylabel("steered_margin = logp(Yes) - logp(No)")
     ax.legend(frameon=True)
@@ -47,7 +60,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", required=True, help="points CSV from eval script")
     ap.add_argument("--out", required=True, help="output .png path")
-    ap.add_argument("--title", default=None, help="overall title")
+    ap.add_argument(
+        "--title",
+        default=None,
+        help='overall title, e.g. "Qwen-3-1.7B | Layer17Head11 | α=±10"',
+    )
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
@@ -59,31 +76,26 @@ def main():
     if missing:
         raise ValueError(f"CSV missing required columns: {missing}")
 
-    # Fixed colors as requested
-    colors = {"minus": "tab:blue", "plus": "tab:orange"}
-
-    # Identify (layer, head) for labeling
+    # Identify (layer, head) for labeling from CSV
     layer = int(df["layer"].iloc[0])
     head = int(df["head"].iloc[0])
     alpha_mag = float(df["alpha"].iloc[0])
 
-    clean = df[df["prompt_type"] == "clean"].copy()
-    corrupt = df[df["prompt_type"] == "corrupt"].copy()
+    greater = df[df["prompt_type"] == "clean"].copy()
+    less = df[df["prompt_type"] == "corrupt"].copy()
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5), constrained_layout=True)
 
     plot_panel(
         axes[0],
-        clean,
-        title=f"clean | L{layer} H{head} | |α|={alpha_mag}",
-        colors=colors,
+        greater,
+        panel_title=f"{prompt_label('clean')} | Layer{layer}Head{head} | |α|={alpha_mag:.0f}",
     )
 
     plot_panel(
         axes[1],
-        corrupt,
-        title=f"corrupt | L{layer} H{head} | |α|={alpha_mag}",
-        colors=colors,
+        less,
+        panel_title=f"{prompt_label('corrupt')} | Layer{layer}Head{head} | |α|={alpha_mag:.0f}",
     )
 
     if args.title:
