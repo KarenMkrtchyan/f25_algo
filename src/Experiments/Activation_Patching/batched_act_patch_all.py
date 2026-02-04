@@ -142,7 +142,15 @@ results = act_patch(
 #%%
 assert results.keys() == {"resid_pre", "attn_out", "mlp_out"}
 
-imshow(
+results_folder = "Results"
+display_folder = os.path.join(results_folder, "Digit_Experiment")
+digit_folder = os.path.join(display_folder, "4digit")
+output_folder = os.path.join(digit_folder, f"{model_name}")
+os.makedirs(output_folder, exist_ok=True)
+block_path = os.path.join(output_folder, "AP_blocks.png")
+head_path = os.path.join(output_folder, "AP_heads.png")
+
+fig_blocks = imshow(
     t.stack([r.T for r in results.values()]) * 100,
     facet_col=0,
     facet_labels=["Residual Stream", "Attn Output", "MLP Output"],
@@ -154,6 +162,7 @@ imshow(
     width=1300,
     margin={"r": 100, "l": 100}
 )
+fig_blocks.write_image(block_path)
 # %% Attnetion head output
 
 results = act_patch(
@@ -166,7 +175,7 @@ results = act_patch(
 )
 #%% 
 
-imshow(
+fig_heads = imshow(
     results['z'] * 100,
     labels={"x": "Head", "y": "Layer", "color": "Logit diff variation"},
     coloraxis=dict(colorbar_ticksuffix = "%"),
@@ -174,6 +183,7 @@ imshow(
     width=600,
     margin={"r": 100, "l": 100}
 )
+fig_heads.write_image(head_path)
 
 # %%
 hist_res = results['z'] * 100
