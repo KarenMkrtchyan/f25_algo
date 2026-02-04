@@ -16,7 +16,7 @@ os.makedirs(results_dir, exist_ok=True)
 from transformer_lens.patching import get_act_patch_attn_head_out_by_pos
 from transformer_lens.HookedTransformer import HookedTransformer
 #%%
-model = HookedTransformer.from_pretrained("Qwen/Qwen2.5-3b")
+model = HookedTransformer.from_pretrained("Qwen/Qwen3-4b")
 
 #%%
 

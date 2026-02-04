@@ -14,7 +14,7 @@ device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
 model = HookedTransformer.from_pretrained(
-    "Qwen/Qwen2.5-3b",
+    "Qwen/Qwen3-4b",
     #"microsoft/Phi-3-mini-4k-instruct",
     center_unembed=True,
     center_writing_weights=True,
@@ -25,8 +25,11 @@ model = HookedTransformer.from_pretrained(
 
 model.set_use_split_qkv_input(True)
 
+
+print(model.cfg.n_layers)
+
 #%%
-prompt_list = prompt_list[:20]
+prompt_list = prompt_list[:50]
 
 prompts = [p["clean_prompt"] for p in prompt_list]
 #prompts = [p["clean_prompt"] + " " for p in prompt_list]    # Phi
@@ -35,15 +38,15 @@ labels = [p["clean_label"] for p in prompt_list]
 
 # Define the answers for each prompt, in the form (correct, incorrect)
 #%%
-answers = [(" yes", " NO") if label == " yes" else (" NO", " yes") for label in labels]
+answers = [(" Yes", " No") if label == " Yes" else (" No", " Yes") for label in labels]
 
 # Define the answer tokens (same shape as the answers)
-yes_id = model.to_single_token(" yes")
-no_id  = model.to_single_token(" NO")
+yes_id = model.to_single_token(" Yes")
+no_id  = model.to_single_token(" No")
 
 answer_tokens = []
 for label in labels:
-    if label == " yes":
+    if label == " Yes":
         answer_tokens.append([yes_id, no_id])
     else:
         answer_tokens.append([no_id, yes_id])
@@ -129,16 +132,17 @@ def greater_than_metric_noising(
     patched_logit_diff = logits_to_ave_logit_diff(logits, answer_tokens)
     return ((patched_logit_diff - clean_logit_diff) / (clean_logit_diff - flipped_logit_diff)).item()
 
-#%%
 
+#%%
 # Patching from attention head -> final residual stream value
+
 
 results = path_patch(
     model,
     orig_input=clean_tokens,
     new_input=flipped_tokens,
     sender_nodes= IterNode('z'),
-    receiver_nodes=Node("resid_post", 31),
+    receiver_nodes=Node("resid_post", 35),
     patching_metric=greater_than_metric_noising,
     verbose=True,
 )

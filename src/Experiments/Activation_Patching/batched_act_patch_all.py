@@ -17,13 +17,13 @@ from huggingface_hub import login
 device = t.device("cuda") if t.cuda.is_available() else t.device("cpu")
 t.set_grad_enabled(False)
 
-load_dotenv()
-hf_key = os.getenv("HF_TOKEN")
-login(token=hf_key)
+#load_dotenv()
+#hf_key = os.getenv("HF_TOKEN")
+#login(token=hf_key)
 
 #%%
 
-model_name = "EleutherAI/pythia-70m-deduped"
+model_name = "Qwen/Qwen3-4b"
 
 model = HookedTransformer.from_pretrained(
     model_name,
@@ -37,10 +37,9 @@ model = HookedTransformer.from_pretrained(
 model.set_use_split_qkv_input(True)
 #%%
 
-prompt_list=prompt_list[:20]
+prompt_list=prompt_list
 
-#prompts = [p["clean_prompt"] for p in prompt_list]
-prompts = [p["clean_prompt"] + " " for p in prompt_list]    # Phi
+prompts = [p["clean_prompt"] for p in prompt_list]
 
 labels = [p["clean_label"] for p in prompt_list]
 
@@ -163,6 +162,7 @@ fig_blocks = imshow(
     margin={"r": 100, "l": 100}
 )
 fig_blocks.write_image(block_path)
+
 # %% Attnetion head output
 
 results = act_patch(
