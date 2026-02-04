@@ -1386,9 +1386,11 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
     heads = t.flip(patch_heads, dims=[0])
 
     def pretty(tok):
-        return tok.replace("Ġ", "▁") if tok.strip() else "<BOS>"
+        if tok in ["<|begin_of_text|>", "<BOS>", "<bos>"]:
+            return "<BOS>"
+        return tok.replace("Ġ", "▁")
 
-    tokens = model.to_str_tokens(model.to_tokens("Is 5678 > 1234? Answer:"))
+    tokens = model.to_str_tokens(model.to_tokens("Is 5678 > 1234? Answer:", prepend_bos=True))
 
     if len(tokens) < num_pos:
         tokens = tokens + [""] * (num_pos - len(tokens))
