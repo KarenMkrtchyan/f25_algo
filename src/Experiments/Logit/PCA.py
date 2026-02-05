@@ -35,8 +35,8 @@ no_id = model.to_single_token(" No")
 #yes_id = model.to_single_token("Yes")
 #no_id = model.to_single_token("No")
 
-Attention_Layers = [18]
-Attention_Heads = [2]
+Attention_Layers = [25]
+Attention_Heads = [8]
 
 batches_base, batches_src, batches_ans = build_numeric_batches(model, dataset, yes_id, no_id, device)
 num_batches = len(batches_src)
