@@ -1390,7 +1390,7 @@ def plot_all_patch_effects_paper(model, patch_resid, patch_attn, patch_mlp, patc
             return "<BOS>"
         return tok.replace("Ġ", "▁")
 
-    tokens = model.to_str_tokens(model.to_tokens("Is 5678 > 1234? Answer:", prepend_bos=True))
+    tokens = model.to_str_tokens(model.to_tokens("Is 87 > 12? Answer:", prepend_bos=True))
 
     if len(tokens) < num_pos:
         tokens = tokens + [""] * (num_pos - len(tokens))

@@ -14,14 +14,14 @@ from Interpretability import build_dataset, build_dataset_space, compute_act_pat
 from neel_plotly import imshow
 import transformer_lens.utils as utils
 
-dataset = build_dataset(n=100, low=1000, high=9999)
+dataset = build_dataset(n=100, low=10, high=99)
 #dataset = build_dataset_space(n=100, low=1000, high=9999)
 
 #model_name = "pythia-70m"
-#model_name = "qwen2.5-3b"
+model_name = "qwen2.5-3b"
 #model_name = "qwen3-1.7b"
 #model_name = "phi-3"
-model_name = "gemma-2-9b-it"
+#model_name = "gemma-2-9b-it"
 #model_name = "llama3-8b-it"
 #model_name = "qwen2.5-7b"
 #model_name = "qwen1.5-4b"
@@ -74,7 +74,7 @@ print("\n")
 tokens_str = model.to_str_tokens(model.to_tokens("Is 56 > 34? Answer:"))
 results_folder = "Results"
 display_folder = os.path.join(results_folder, "Digit_Experiment")
-digit_folder = os.path.join(display_folder, "4digit")
+digit_folder = os.path.join(display_folder, "2digit")
 output_folder = os.path.join(digit_folder, f"{model_name}")
 os.makedirs(output_folder, exist_ok=True)
 csv_path = os.path.join(output_folder, "head_importance.csv")
