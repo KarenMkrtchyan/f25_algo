@@ -25,7 +25,7 @@ dataset = build_dataset(n=100, low=1000, high=9999)
 #model_name = "llama3-8b-it"
 model_name = "qwen2.5-7b"
 #model_name = "qwen1.5-4b"
-model_name = "qwen3-4b"
+#model_name = "qwen3-4b"
 
 model = load_model(model_name, torch_dtype = t.bfloat16)
 device = get_device()
