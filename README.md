@@ -3,10 +3,6 @@
 This is the code for an upcoming paper about the universality theorem examed under mechanistic interpretability
 and causality lense
 
-## Contributors (in no particular order)
-
-Julian Ramirez, Karen Mkrtchyan, Arya Bhardia, Syd Verma, Akhil Jalan
-
 ## Setup
 
 ### Conda env
